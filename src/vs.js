@@ -271,15 +271,18 @@ function resolveShot(game) {
   const tawInRing = Math.hypot(shooter.x - RING.cx, shooter.y - RING.cy) < RING.r;
   const shooterInRing = tawInRing;
 
-  // 找出本轮出圈的彩珠（出圈 + 属于当前射手）
+  // 找出本轮出圈的彩珠（出圈 + 属于当前射手），记录赢走的珠子
   let knockedOut = 0;
+  const wonMarbles = [];
   let hitOpponentTaw = false;
   for (const m of marbles) {
     if (isOutOfRing(m) && !m.captured) {
       // 出圈彩珠：先标记 captured（防止重复计分），再给当前射手
       m.captured = true;
       m.outOfRing = true;
+      m.owner = game.turn; // 记录归属（player/ai）
       knockedOut++;
+      wonMarbles.push({ id: m.id, x: m.x, y: m.y }); // 记录位置（供飞入动画）
     }
   }
   // 检查是否撞出对方母弹
@@ -307,6 +310,7 @@ function resolveShot(game) {
   game.lastShot = {
     shooter: game.turn,
     knockedOut,
+    wonMarbles,          // 本轮赢走的珠子（id + 位置）
     tawInRing: shooterInRing,
     hitOpponentTaw,
   };

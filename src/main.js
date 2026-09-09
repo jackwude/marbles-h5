@@ -212,8 +212,11 @@ function startVs(aiLevel = 1) {
 }
 
 function updateVsHUD(g) {
-  $('vs-score-player').textContent = `我 ${g.scores.player}`;
-  $('vs-score-ai').textContent = `AI ${g.scores.ai}`;
+  $('vs-count-player').textContent = g.scores.player;
+  $('vs-count-ai').textContent = g.scores.ai;
+  // 渲染袋子里的珠子（根据 owner 归属）
+  renderPouch('player');
+  renderPouch('ai');
   // 回合横幅
   const banner = $('vs-turn-banner');
   if (g.state === VsState.PLAYER_AIM) {
@@ -225,6 +228,39 @@ function updateVsHUD(g) {
   } else if (g.state === VsState.GAME_OVER) {
     banner.textContent = '';
   }
+}
+
+// 渲染一方袋子里的珠子（彩色小点，对应赢走的玻璃珠样式）
+function renderPouch(side) {
+  const marbles = vsGame.world.balls.filter((b) => b.id.startsWith('m') && b.owner === side);
+  const el = $(`vs-marbles-${side}`);
+  el.innerHTML = '';
+  marbles.forEach((m) => {
+    const dot = document.createElement('span');
+    dot.className = 'vs-pouch-marble';
+    // 用样式索引配色（与 vs-render MARBLE_STYLES 一致）
+    const styleIdx = parseInt(m.id.slice(1), 10) % 8;
+    const colors = ['#e74c3c', '#ff8800', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#1abc9c', '#e84393'];
+    dot.style.background = colors[styleIdx];
+    el.appendChild(dot);
+  });
+}
+
+// 结算卡片袋子（玩家赢得的珠子）
+function renderPouchResult(containerId) {
+  if (!vsGame) return;
+  const marbles = vsGame.world.balls.filter((b) => b.id.startsWith('m') && b.owner === 'player');
+  const el = $(`vs-marbles-${containerId}`);
+  if (!el) return;
+  el.innerHTML = '';
+  marbles.forEach((m) => {
+    const dot = document.createElement('span');
+    dot.className = 'vs-pouch-marble';
+    const styleIdx = parseInt(m.id.slice(1), 10) % 8;
+    const colors = ['#e74c3c', '#ff8800', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#1abc9c', '#e84393'];
+    dot.style.background = colors[styleIdx];
+    el.appendChild(dot);
+  });
 }
 
 function onVsGameOver(g) {
@@ -243,6 +279,13 @@ function onVsGameOver(g) {
   }
   detail.innerHTML = `<div class="vs-score-line"><span class="vs-score vs-player">我 ${g.scores.player}</span> : <span class="vs-score vs-ai">AI ${g.scores.ai}</span></div>
     <div class="vs-result-sub">圈内彩珠已清空，${g.scores.player === g.scores.ai ? '平分秋色' : (g.scores.player > g.scores.ai ? '你赢走了更多弹珠！' : 'AI 赢走了更多弹珠…')}</div>`;
+  // 结算卡片里的袋子快照（显示最终赢得的珠子）
+  const pouchSnap = document.createElement('div');
+  pouchSnap.className = 'vs-result-pouch';
+  pouchSnap.innerHTML = `<div class="vs-pouch" id="vs-pouch-result"><span class="vs-pouch-label">我</span><span class="vs-pouch-count">${g.scores.player}</span><div class="vs-pouch-marbles" id="vs-marbles-result"></div></div>`;
+  const detailEl = $('vs-result-detail');
+  detailEl.appendChild(pouchSnap);
+  renderPouchResult('result');
 }
 
 // ===== 事件绑定 =====

@@ -248,13 +248,54 @@ body { display: flex; align-items: center; justify-content: center; }
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
 }
-.vs-score { padding: 2px 10px; border-radius: 999px; }
-.vs-player { background: rgba(231,76,60,0.3); color: #ff8a80; }
-.vs-ai { background: rgba(52,152,219,0.3); color: #8ac4ff; }
+.vs-pouch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 999px;
+  padding: 3px 10px;
+  min-height: 26px;
+  transition: box-shadow 0.3s, background 0.3s;
+}
+.vs-pouch-glow {
+  box-shadow: 0 0 12px rgba(255,210,122,0.7);
+  background: rgba(80,50,10,0.5);
+}
+.vs-pouch-label { font-size: 12px; color: #ffd27a; }
+.vs-pouch-ai .vs-pouch-label { color: #8ac4ff; }
+.vs-pouch-count { font-size: 15px; min-width: 14px; text-align: center; }
+.vs-pouch-marbles {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  max-width: 90px;
+  flex-wrap: wrap;
+}
+.vs-pouch-marble {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: inset -1px -1px 2px rgba(0,0,0,0.4), inset 1px 1px 2px rgba(255,255,255,0.5);
+}
+.vs-colon { color: #aaa; }
+
+/* 珠子飞入袋子动画 */
+.vs-fly-marble {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  z-index: 40;
+  pointer-events: none;
+  transition: left 0.55s cubic-bezier(0.3, 0.8, 0.4, 1), top 0.55s cubic-bezier(0.3, 0.8, 0.4, 1), opacity 0.55s, transform 0.55s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
 #vs-canvas {
   display: block;
   width: 100%;

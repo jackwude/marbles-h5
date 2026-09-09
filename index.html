@@ -57,7 +57,19 @@
   <div id="screen-vs" class="screen hidden">
     <div id="vs-hud">
       <button class="hud-btn" id="btn-vs-home">‹ 返回</button>
-      <div id="vs-scores"><span id="vs-score-player" class="vs-score vs-player">我 0</span> : <span id="vs-score-ai" class="vs-score vs-ai">AI 0</span></div>
+      <div id="vs-scores">
+        <div class="vs-pouch" id="vs-pouch-player">
+          <span class="vs-pouch-label">我</span>
+          <span class="vs-pouch-count" id="vs-count-player">0</span>
+          <div class="vs-pouch-marbles" id="vs-marbles-player"></div>
+        </div>
+        <span class="vs-colon">:</span>
+        <div class="vs-pouch vs-pouch-ai" id="vs-pouch-ai">
+          <span class="vs-pouch-label">AI</span>
+          <span class="vs-pouch-count" id="vs-count-ai">0</span>
+          <div class="vs-pouch-marbles" id="vs-marbles-ai"></div>
+        </div>
+      </div>
       <button class="hud-btn" id="btn-vs-restart">↻</button>
     </div>
     <div id="vs-turn-banner" class="vs-turn-banner">轮到你了</div>
@@ -73,8 +85,8 @@
   </div>
 
   <!-- 版本号（右下角，便于确认更新） -->
-  <div id="version-badge">v0.6.1</div>
+  <div id="version-badge">v0.6.2</div>
 
-  <script type="module" src="src/main.js?v=0.6.1"></script>
+  <script type="module" src="src/main.js?v=0.6.2"></script>
 </body>
 </html>

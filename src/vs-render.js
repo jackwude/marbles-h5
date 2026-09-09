@@ -153,37 +153,76 @@ export class VsRenderer {
     }
   }
 
-  // 检测射击结果，显示反馈横幅（大翻盘/连杀/母弹被撞）
+  // 检测射击结果，显示反馈
   _checkShotFeedback() {
     const ls = this.game.lastShot;
     if (!ls) return;
     const stamp = this.game.world.time; // 用世界时间做去重
     if (this._lastFeedbackStamp === stamp) return;
     this._lastFeedbackStamp = stamp;
-    let msg = '';
-    if (ls.hitOpponentTaw) {
-      msg = ls.shooter === 'player' ? '💥 撞飞对方母弹！抢走全部弹珠！' : '😱 母弹被撞飞！AI 抢走了你的弹珠！';
-      this.audio.play('star');
-    } else if (ls.knockedOut > 0 && ls.tawInRing) {
-      msg = ls.shooter === 'player' ? '🔥 连击！继续弹！' : 'AI 连击了…';
-    } else if (ls.knockedOut > 0) {
-      msg = ls.shooter === 'player' ? '🎯 撞出弹珠！' : 'AI 撞出弹珠';
+    // 撞出珠子：轻提示（不打扰）——触发"珠子飞入袋子"动画 + 积分板高亮
+    if (ls.knockedOut > 0) {
+      this._flyMarblesToPouch(ls.wonMarbles || [], ls.shooter);
+      if (this.callbacks.onMarbleWon) this.callbacks.onMarbleWon(ls.shooter, ls.knockedOut);
+      this.audio.play('hole'); // 清脆一声，表示收入
+      // 连杀：小横幅（不打扰，简短）
+      if (ls.tawInRing) {
+        this._showFeedbackBanner(ls.shooter === 'player' ? '🔥 连击！' : 'AI 连击', true);
+      }
     }
-    if (msg) this._showFeedbackBanner(msg);
+    // 大翻盘（撞飞母弹）：大横幅（值得强调）
+    if (ls.hitOpponentTaw) {
+      this.audio.play('star');
+      this._showFeedbackBanner(ls.shooter === 'player' ? '💥 撞飞对方母弹！抢走全部！' : '😱 母弹被撞飞！全部被抢走！', false);
+    }
   }
 
-  // 显示居中反馈横幅（自动消失）
-  _showFeedbackBanner(msg) {
+  // 珠子飞入袋子动画（轻提示）：从出圈位置飞向积分板
+  _flyMarblesToPouch(wonMarbles, side) {
+    if (!wonMarbles.length) return;
+    // 找到积分板袋子位置
+    const pouchEl = document.getElementById(`vs-pouch-${side}`);
+    if (!pouchEl) return;
+    const pouchRect = pouchEl.getBoundingClientRect();
+    const targetX = pouchRect.left + pouchRect.width / 2;
+    const targetY = pouchRect.top + pouchRect.height / 2;
+    wonMarbles.forEach((wm) => {
+      // 从出圈位置（世界坐标→屏幕）创建飞入小球
+      const sp = this._toScreen(wm.x, wm.y);
+      const el = document.createElement('div');
+      el.className = 'vs-fly-marble';
+      const styleIdx = parseInt(wm.id.slice(1), 10) % 8;
+      const colors = ['#e74c3c', '#ff8800', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#1abc9c', '#e84393'];
+      el.style.background = colors[styleIdx];
+      el.style.left = sp.x + 'px';
+      el.style.top = sp.y + 'px';
+      document.body.appendChild(el);
+      // 用 CSS transition 飞向袋子
+      requestAnimationFrame(() => {
+        el.style.left = targetX + 'px';
+        el.style.top = targetY + 'px';
+        el.style.opacity = '0.3';
+        el.style.transform = 'scale(0.3)';
+      });
+      setTimeout(() => el.remove(), 700);
+    });
+    // 袋子高亮
+    pouchEl.classList.add('vs-pouch-glow');
+    setTimeout(() => pouchEl.classList.remove('vs-pouch-glow'), 500);
+  }
+
+  // 显示居中反馈横幅（大 = 强调，小 = 轻提示）
+  _showFeedbackBanner(msg, small = false) {
     if (this._feedbackEl) this._feedbackEl.remove();
     const el = document.createElement('div');
-    el.className = 'vs-feedback';
+    el.className = 'vs-feedback' + (small ? ' vs-feedback-small' : '');
     el.textContent = msg;
     document.body.appendChild(el);
     this._feedbackEl = el;
     clearTimeout(this._fbTimer);
     this._fbTimer = setTimeout(() => {
       if (this._feedbackEl) { this._feedbackEl.remove(); this._feedbackEl = null; }
-    }, 1400);
+    }, small ? 900 : 1500);
   }
 
   // ===== 绘制 =====
