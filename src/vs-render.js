@@ -174,7 +174,12 @@ export class VsRenderer {
     // 母珠停圈内（惩罚）：换人 + 重置起始线
     else if (ls.stuckInRing) {
       this.audio.play('bounce');
-      this._showFeedbackBanner(ls.shooter === 'player' ? '⚠️ 母珠停在圈内！回合结束，回到起始线' : '⚠️ AI 母珠停在圈内，回起始线', true);
+      if (ls.canceled) {
+        // 打中了彩珠但母珠停圈内 → 彩珠作废归还
+        this._showFeedbackBanner(ls.shooter === 'player' ? '⚠️ 母珠停在圈内！彩珠归还，回起始线' : '⚠️ AI 母珠停在圈内，彩珠归还', true);
+      } else {
+        this._showFeedbackBanner(ls.shooter === 'player' ? '⚠️ 母珠停在圈内！回合结束，回到起始线' : '⚠️ AI 母珠停在圈内，回起始线', true);
+      }
     }
     // 母珠出圈但没击出（白打）：换人，母珠留原地
     else if (ls.tawOutNoHit) {

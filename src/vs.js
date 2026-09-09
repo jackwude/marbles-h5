@@ -88,6 +88,21 @@ function isOutOfRing(b) {
   return d > RING.r;
 }
 
+// 圈内随机位置（用于"停圈内惩罚"归还彩珠时重新摆放，避开已有珠子）
+function randomInRing(balls = []) {
+  const { cx, cy, r } = RING;
+  for (let i = 0; i < 60; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = Math.random() * r * 0.6;
+    const x = cx + Math.cos(ang) * rad;
+    const y = cy + Math.sin(ang) * rad;
+    const overlap = balls.some((b) => Math.hypot(b.x - x, b.y - y) < VS_CFG.marbleR * 2.4);
+    if (!overlap) return { x, y };
+  }
+  // 兜底：圈中心
+  return { x: cx, y: cy };
+}
+
 // 玩家设瞄准（同闯关：反向拖拽）
 export function vsSetAim(game, dx, dy, maxDrag = 120) {
   const len = Math.hypot(dx, dy);
@@ -274,57 +289,88 @@ function resolveShot(game) {
   const tawInRing = Math.hypot(shooter.x - RING.cx, shooter.y - RING.cy) < RING.r;
   const shooterInRing = tawInRing;
 
-  // 1. 找出本轮出圈的彩珠（出圈 + 未捕获），记录赢走的珠子
+  // 1. 找出本轮出圈的彩珠（出圈 + 未捕获）
+  // ⚠️ 不立即计分！等确认母珠状态后决定：出圈→归射手；停圈内→归还圈内
   let knockedOut = 0;
   const wonMarbles = [];
   for (const m of marbles) {
     if (isOutOfRing(m) && !m.captured) {
-      // 出圈彩珠：标记 captured（防重复计分），归射手
-      m.captured = true;
-      m.outOfRing = true;
-      m.owner = game.turn; // 记录归属（player/ai）
       knockedOut++;
-      wonMarbles.push({ id: m.id, x: m.x, y: m.y }); // 记录位置（供飞入动画）
+      wonMarbles.push({ id: m.id, x: m.x, y: m.y, m }); // 记录出圈彩珠（暂存，待定归属）
     }
   }
-  if (knockedOut > 0) {
-    game.scores[game.turn] += knockedOut;
-    game.inRing -= knockedOut;
-  }
 
-  // 记录本次结果（供 UI 显示）
-  game.lastShot = {
-    shooter: game.turn,
-    knockedOut,
-    wonMarbles,
-    tawInRing: shooterInRing,
-    // 连打 = 击出 ≥1 颗 且 母珠出圈（母珠滚出圈 = 安全完成一击）
-    combo: knockedOut > 0 && !shooterInRing,
-    // 母珠停圈内（惩罚，换人 + 重置起始线）
-    stuckInRing: shooterInRing,
-    // 母珠出圈但没击出（换人，母珠留在出圈处）
-    tawOutNoHit: !shooterInRing && knockedOut === 0,
-  };
-
-  // 2. 连打：击出 ≥1 颗 且 母珠出圈 → 继续本回合（从母珠出圈处）
-  if (knockedOut > 0 && !shooterInRing) {
-    game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
-    return; // 不换边，不重置母珠，从母珠当前位置继续
-  }
-
-  // 3/4. 换人
-  game.turn = game.turn === 'player' ? 'ai' : 'player';
-  game.turnCount++;
-  // 3. 母珠停圈内（惩罚）→ 重置回起始线（起始线在下，玩家左 AI 右）
-  // 4. 母珠出圈但没击出 → 母珠留在出圈处（不重置）
+  // 2. 分支判定
   if (shooterInRing) {
-    // 惩罚：重置回起始线（玩家在下左，AI 在下右）
+    // ===== 母珠停圈内 = 惩罚（整个回合作废）=====
+    // 打出的彩珠不归射手，全部归还圈内（重新随机摆回圈内）
+    for (const w of wonMarbles) {
+      const m = w.m;
+      m.captured = false;
+      m.outOfRing = false;
+      m.owner = null;
+      // 摆回圈内随机位置（避开已有珠子）
+      const { x, y } = randomInRing(marbles);
+      m.x = x; m.y = y;
+      m.vx = 0; m.vy = 0;
+    }
+    // 记录结果（供 UI 显示）
+    game.lastShot = {
+      shooter: game.turn,
+      knockedOut: 0, // 作废，不算赢
+      wonMarbles: [],
+      tawInRing: true,
+      combo: false,
+      stuckInRing: true, // 惩罚
+      tawOutNoHit: false,
+      canceled: wonMarbles.length > 0, // 打出的彩珠被作废归还
+    };
+    // 换人 + 母珠重置回起始线
+    game.turn = game.turn === 'player' ? 'ai' : 'player';
+    game.turnCount++;
     const tb = game.world.balls.find((b) => b.id === shooterId);
     if (tb) {
       tb.x = shooterId === 'player_taw' ? WORLD_W * 0.3 : WORLD_W * 0.7;
       tb.y = WORLD_H - 80; // 起始线在下
       tb.vx = 0; tb.vy = 0;
     }
+  } else if (knockedOut > 0) {
+    // ===== 母珠出圈 + 击出彩珠 = 连打（彩珠归射手）=====
+    for (const w of wonMarbles) {
+      const m = w.m;
+      m.captured = true;
+      m.outOfRing = true;
+      m.owner = game.turn;
+    }
+    game.scores[game.turn] += knockedOut;
+    game.inRing -= knockedOut;
+    game.lastShot = {
+      shooter: game.turn,
+      knockedOut,
+      wonMarbles: wonMarbles.map(({ id, x, y }) => ({ id, x, y })),
+      tawInRing: false,
+      combo: true, // 连打！
+      stuckInRing: false,
+      tawOutNoHit: false,
+      canceled: false,
+    };
+    game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
+    return; // 不换边，从母珠出圈处继续
+  } else {
+    // ===== 母珠出圈 + 没击出 = 换人，母珠留原地 =====
+    game.lastShot = {
+      shooter: game.turn,
+      knockedOut: 0,
+      wonMarbles: [],
+      tawInRing: false,
+      combo: false,
+      stuckInRing: false,
+      tawOutNoHit: true,
+      canceled: false,
+    };
+    game.turn = game.turn === 'player' ? 'ai' : 'player';
+    game.turnCount++;
+    // 母珠留在出圈处（不重置）
   }
 
   // 胜负判定
