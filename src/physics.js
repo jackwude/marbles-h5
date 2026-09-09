@@ -26,8 +26,10 @@ export function makeBall(id, x, y, r = 10, vx = 0, vy = 0) {
 }
 
 // 单帧推进：摩擦 → 停止 → 边界 → 碰撞 → 进洞
+// world.events 收集本帧事件：[{type:'wall'|'collide', impact}]
 export function step(world, dt = 1) {
   world.time += dt;
+  world.events = [];
   for (const b of world.balls) {
     if (b.captured) continue;
     // 摩擦衰减
@@ -45,10 +47,10 @@ export function step(world, dt = 1) {
     b.y += b.vy * dt;
     // 边界反弹
     if (world.walls) {
-      if (b.x - b.r < 0) { b.x = b.r; b.vx = -b.vx * PHYS.restitution; }
-      if (b.x + b.r > world.w) { b.x = world.w - b.r; b.vx = -b.vx * PHYS.restitution; }
-      if (b.y - b.r < 0) { b.y = b.r; b.vy = -b.vy * PHYS.restitution; }
-      if (b.y + b.r > world.h) { b.y = world.h - b.r; b.vy = -b.vy * PHYS.restitution; }
+      if (b.x - b.r < 0) { b.x = b.r; b.vx = -b.vx * PHYS.restitution; world.events.push({ type: 'wall', impact: Math.abs(b.vx) }); }
+      if (b.x + b.r > world.w) { b.x = world.w - b.r; b.vx = -b.vx * PHYS.restitution; world.events.push({ type: 'wall', impact: Math.abs(b.vx) }); }
+      if (b.y - b.r < 0) { b.y = b.r; b.vy = -b.vy * PHYS.restitution; world.events.push({ type: 'wall', impact: Math.abs(b.vy) }); }
+      if (b.y + b.r > world.h) { b.y = world.h - b.r; b.vy = -b.vy * PHYS.restitution; world.events.push({ type: 'wall', impact: Math.abs(b.vy) }); }
     }
   }
   resolveCollisions(world);
@@ -63,7 +65,8 @@ export function resolveCollisions(world) {
   for (const b of balls) {
     if (b.captured) continue;
     for (const o of obstacles) {
-      collidePair(b, o, o.r, true);
+      const hit = collidePair(b, o, o.r, true);
+      if (hit) world.events.push({ type: 'collide', impact: hit });
     }
   }
   // 动-动（弹珠互撞）
@@ -73,7 +76,8 @@ export function resolveCollisions(world) {
     for (let j = i + 1; j < balls.length; j++) {
       const c = balls[j];
       if (c.captured) continue;
-      collidePair(a, c, c.r, false);
+      const hit = collidePair(a, c, c.r, false);
+      if (hit) world.events.push({ type: 'collide', impact: hit });
     }
   }
 }
@@ -103,7 +107,9 @@ function collidePair(a, b, rb, isStatic) {
     const impulse = vn * (isStatic ? (1 + PHYS.restitution) : 1);
     a.vx -= impulse * nx; a.vy -= impulse * ny;
     if (!isStatic) { b.vx += impulse * nx; b.vy += impulse * ny; }
+    return impulse; // 冲击力度（用于音效/震动）
   }
+  return 0;
 }
 
 // 进洞判定：圆心距 < 洞半径 × ratio → captured

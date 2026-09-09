@@ -53,7 +53,13 @@ function buildSkins() {
   list.innerHTML = '';
   SKIN_ORDER.forEach((id) => {
     const s = SKINS[id];
-    const unlocked = s.unlockStars <= save.totalStars;
+    // 钢珠特殊：全关卡三星（且全部解锁）
+    let unlocked;
+    if (id === 'steel') {
+      unlocked = LEVELS.length > 0 && LEVELS.every((lv) => save.stars[lv.id] === 3) && save.unlocked >= LEVELS.length;
+    } else {
+      unlocked = s.unlockStars <= save.totalStars;
+    }
     const item = document.createElement('div');
     item.className = 'skin-item' + (save.skin === id ? ' selected' : '') + (unlocked ? '' : ' locked');
     const dot = document.createElement('div');
@@ -83,6 +89,7 @@ function startLevel(levelId) {
   currentLevelId = levelId;
   const game = createGame(levelId);
   if (!audio) audio = new GameAudio();
+  audio.startAmbience(); // 环境音（知了/麻雀氛围）
   if (renderer) { renderer.game = game; renderer._stateChanged(); }
   else {
     renderer = new GameRenderer($('game-canvas'), game, {

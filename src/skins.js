@@ -21,4 +21,6 @@ export const SKINS = {
     spiral: false, stripe: false, pattern: null,
   },
 };
+// 钢珠特殊：需要全关卡三星
+export const STEEL_ALL_THREE = true;
 export const SKIN_ORDER = ['transparent', 'pattern', 'cat', 'steel'];

@@ -80,7 +80,16 @@ export class GameRenderer {
     const dy = e.clientY - this._startY;
     // 拖拽允许超出屏幕边缘（clamp 到窗口内，保证边缘也能满力）
     const maxDrag = Math.min(this.viewW, this.viewH) * 0.35;
+    const prevPower = this.game.power;
     setAim(this.game, dx, dy, maxDrag);
+    // 蓄力音效：力度上升时"呼~"渐强（节流）
+    if (this.game.power > prevPower + 0.03) {
+      const now = performance.now();
+      if (!this._chargeTick || now - this._chargeTick > 120) {
+        this.audio.play('charge', Math.max(0.05, this.game.power * 0.5));
+        this._chargeTick = now;
+      }
+    }
   }
 
   _stateChanged() {
@@ -94,10 +103,12 @@ export class GameRenderer {
     try {
       if (this.game.state === GameState.ROLLING) {
         update(this.game, dt);
+        this._handleEvents();
         if (this.game.state !== GameState.ROLLING) {
           // 停下来了
           if (this.game.state === GameState.CAPTURED) {
             this.audio.play('hole');
+            this._captureAnim = 0;
             if (this.callbacks.onCaptured) this.callbacks.onCaptured(this.game);
           } else {
             settle(this.game);
@@ -112,6 +123,10 @@ export class GameRenderer {
     } catch (e) {
       console.error('loop error:', e);
     }
+    // 进洞下沉动画推进
+    if (this._captureAnim !== undefined && this._captureAnim < 1) {
+      this._captureAnim = Math.min(this._captureAnim + dt * 0.05, 1);
+    }
     // 绘制（异常不阻断 rAF 链）
     try {
       this._draw();
@@ -119,6 +134,31 @@ export class GameRenderer {
       console.error('draw error:', e);
     }
     requestAnimationFrame((t2) => this._loop(t2));
+  }
+
+  _handleEvents() {
+    const events = this.game.world.events || [];
+    for (const ev of events) {
+      // 碰撞音效（按冲击力度调整音量）
+      if (ev.impact > 0.5) {
+        this.audio.play('bounce', Math.min(ev.impact / 6, 1));
+        // 屏幕震动（Web Vibration API）
+        if (navigator.vibrate && ev.impact > 1.2) {
+          navigator.vibrate(15);
+        }
+      }
+    }
+    // 滚动音效：弹珠低速移动时细碎声
+    const b = this.game.world.balls[0];
+    if (this.game.state === GameState.ROLLING && b && !b.captured) {
+      const speed = Math.hypot(b.vx, b.vy);
+      if (speed > 0.1 && speed < 1.5) {
+        if (!this._rollingSoundTick || performance.now() - this._rollingSoundTick > 400) {
+          this.audio.play('roll', Math.min(speed / 2, 0.5));
+          this._rollingSoundTick = performance.now();
+        }
+      }
+    }
   }
 
   // ===== 绘制 =====
@@ -218,14 +258,19 @@ export class GameRenderer {
     const b = this.game.world.balls[0];
     const skinId = typeof this.callbacks.skin === 'function' ? this.callbacks.skin() : this.callbacks.skin;
     const skin = SKINS[skinId] || SKINS.transparent;
-    // 进洞下沉动画
+    // 进洞下沉动画（_captureAnim 0→1：缩小+下沉+淡出）
     if (b.captured) {
-      const t = (performance.now() % 400) / 400;
-      const r = b.r * (1 - t * 0.7);
+      const t = this._captureAnim !== undefined ? this._captureAnim : 1;
+      const r = b.r * (1 - t * 0.8);
       ctx.save();
+      ctx.globalAlpha = 1 - t * 0.7;
       ctx.beginPath();
-      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#0d0703';
+      ctx.arc(b.x, b.y + t * b.r * 0.6, r, 0, Math.PI * 2);
+      const g = ctx.createRadialGradient(b.x - r * 0.3, b.y + t * b.r * 0.6 - r * 0.3, r * 0.1, b.x, b.y + t * b.r * 0.6, r);
+      g.addColorStop(0, skin.highlight);
+      g.addColorStop(0.4, skin.base);
+      g.addColorStop(1, skin.shadow);
+      ctx.fillStyle = g;
       ctx.fill();
       ctx.restore();
       return;
@@ -314,6 +359,7 @@ export class GameAudio {
   constructor() {
     this.ctx = null;
     this.enabled = true;
+    this.envNodes = null;
   }
   _ensure() {
     if (!this.ctx) {
@@ -321,7 +367,7 @@ export class GameAudio {
     }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
-  play(type) {
+  play(type, volume = 0.25) {
     if (!this.enabled) return;
     this._ensure();
     if (!this.ctx) return;
@@ -329,31 +375,76 @@ export class GameAudio {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.connect(gain); gain.connect(this.ctx.destination);
+    const v = Math.max(0.02, Math.min(volume, 0.5));
     switch (type) {
-      case 'launch':
+      case 'launch': // 短促"啵"
         osc.type = 'sine'; osc.frequency.setValueAtTime(300, t);
         osc.frequency.exponentialRampToValueAtTime(700, t + 0.12);
-        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.setValueAtTime(v, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
         break;
-      case 'bounce':
-        osc.type = 'triangle'; osc.frequency.setValueAtTime(180, t);
-        gain.gain.setValueAtTime(0.25, t);
+      case 'bounce': // 闷响"咚"（玻璃撞玻璃）
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(160 + v * 120, t);
+        gain.gain.setValueAtTime(v, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
         break;
-      case 'hole':
+      case 'charge': // 蓄力"呼~"渐强
+        osc.type = 'sine'; osc.frequency.setValueAtTime(120 + v * 160, t);
+        gain.gain.setValueAtTime(0.03, t);
+        gain.gain.linearRampToValueAtTime(v * 0.5, t + 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        break;
+      case 'roll': // 滚动细碎声
+        osc.type = 'square'; osc.frequency.setValueAtTime(2000 + v * 800, t);
+        gain.gain.setValueAtTime(v * 0.06, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        break;
+      case 'hole': // 清脆"叮——"上滑
         osc.type = 'sine';
         osc.frequency.setValueAtTime(600, t);
         osc.frequency.exponentialRampToValueAtTime(1200, t + 0.2);
-        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.setValueAtTime(v, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
         break;
-      case 'star':
-        osc.type = 'sine'; osc.frequency.setValueAtTime(880, t);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      case 'star': { // 星星"叮叮叮"三连
+        const notes = [880, 1108, 1318];
+        notes.forEach((f, i) => {
+          const to = t + i * 0.09;
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.connect(g); g.connect(this.ctx.destination);
+          o.type = 'sine'; o.frequency.setValueAtTime(f, to);
+          g.gain.setValueAtTime(v * 0.6, to);
+          g.gain.exponentialRampToValueAtTime(0.001, to + 0.12);
+          o.start(to); o.stop(to + 0.15);
+        });
+        return;
+      }
+      case 'env_cricket': // 环境音：远处知了
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(4200, t);
+        gain.gain.setValueAtTime(0.012, t);
+        gain.gain.setValueAtTime(0.012, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
         break;
     }
     osc.start(t); osc.stop(t + 0.3);
+  }
+
+  // 环境音循环（知了/麻雀氛围，低声量）
+  startAmbience() {
+    if (!this.enabled) return;
+    this._ensure();
+    if (!this.ctx || this.envNodes) return;
+    // 简单循环：每 1.5~2.5s 随机一声知了/鸟叫
+    const loop = () => {
+      if (!this.envNodes) return;
+      this.play('env_cricket', 0.05);
+      setTimeout(loop, 1500 + Math.random() * 1000);
+    };
+    this.envNodes = { loop };
+    setTimeout(loop, 800);
+  }
+  stopAmbience() {
+    this.envNodes = null;
   }
 }

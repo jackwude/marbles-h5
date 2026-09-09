@@ -26,13 +26,27 @@ body { display: flex; align-items: center; justify-content: center; }
 }
 .hidden { display: none !important; }
 
-/* 标题 */
+/* 标题 - 童年手写粉笔感 */
 .title {
+  font-family: "Kaiti SC", "STKaiti", "KaiTi", "华文楷体", "楷体", cursive;
   font-size: 64px;
   font-weight: 800;
   letter-spacing: 6px;
   color: #ffd27a;
   text-shadow: 0 3px 0 #7a4a1a, 0 6px 14px rgba(0,0,0,0.4);
+  /* 粉笔质感 */
+  -webkit-text-stroke: 1px rgba(255,255,255,0.15);
+  transform: rotate(-2deg);
+}
+.tagline {
+  font-size: 15px;
+  color: #f0d9a8;
+  opacity: 0.92;
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.8;
+  font-style: italic;
+  letter-spacing: 0.5px;
 }
 .subtitle { font-size: 16px; color: #f0d9a8; opacity: 0.9; text-align: center; max-width: 260px; line-height: 1.6; }
 
