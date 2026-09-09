@@ -36,3 +36,11 @@ test/             # 单测（node:test）
 - 松手发射，用有限次数把弹珠送进洞
 - 剩余次数越多，星级越高（剩≥2：★★★，剩1：★★，0：★）
 - 累计星级解锁皮肤：透明珠 → 花纹珠 → 猫眼珠 → 钢珠
+
+## 线上部署
+
+- CF Pages 项目：`marbles`（Production: main 分支）
+- 地址：https://marbles-bws.pages.dev/
+- 部署命令：`npx wrangler pages deploy . --project-name marbles --branch main`
+- ⚠️ 独立项目，不碰 baby-tracker / baby-album 等现有线上项目
+
