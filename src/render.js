@@ -114,8 +114,7 @@ export class GameRenderer {
             settle(this.game);
             if (this.game.state === GameState.OUT) {
               if (this.callbacks.onOut) this.callbacks.onOut(this.game);
-            } else {
-              this._stateChanged();
+            } else {              this._stateChanged();
             }
           }
         }
