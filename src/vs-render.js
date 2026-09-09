@@ -130,6 +130,8 @@ export class VsRenderer {
         this.audio.play('star');
         if (this.callbacks.onGameOver) this.callbacks.onGameOver(this.game);
       }
+      // 反馈横幅：检测上次射击结果（大翻盘 / 连杀 / 母弹重置）
+      this._checkShotFeedback();
     } catch (e) {
       console.error('vs loop error:', e);
     }
@@ -149,6 +151,39 @@ export class VsRenderer {
         if (navigator.vibrate && ev.impact > 1.2) navigator.vibrate(15);
       }
     }
+  }
+
+  // 检测射击结果，显示反馈横幅（大翻盘/连杀/母弹被撞）
+  _checkShotFeedback() {
+    const ls = this.game.lastShot;
+    if (!ls) return;
+    const stamp = this.game.world.time; // 用世界时间做去重
+    if (this._lastFeedbackStamp === stamp) return;
+    this._lastFeedbackStamp = stamp;
+    let msg = '';
+    if (ls.hitOpponentTaw) {
+      msg = ls.shooter === 'player' ? '💥 撞飞对方母弹！抢走全部弹珠！' : '😱 母弹被撞飞！AI 抢走了你的弹珠！';
+      this.audio.play('star');
+    } else if (ls.knockedOut > 0 && ls.tawInRing) {
+      msg = ls.shooter === 'player' ? '🔥 连击！继续弹！' : 'AI 连击了…';
+    } else if (ls.knockedOut > 0) {
+      msg = ls.shooter === 'player' ? '🎯 撞出弹珠！' : 'AI 撞出弹珠';
+    }
+    if (msg) this._showFeedbackBanner(msg);
+  }
+
+  // 显示居中反馈横幅（自动消失）
+  _showFeedbackBanner(msg) {
+    if (this._feedbackEl) this._feedbackEl.remove();
+    const el = document.createElement('div');
+    el.className = 'vs-feedback';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    this._feedbackEl = el;
+    clearTimeout(this._fbTimer);
+    this._fbTimer = setTimeout(() => {
+      if (this._feedbackEl) { this._feedbackEl.remove(); this._feedbackEl = null; }
+    }, 1400);
   }
 
   // ===== 绘制 =====
