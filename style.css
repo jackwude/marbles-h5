@@ -285,6 +285,44 @@ body { display: flex; align-items: center; justify-content: center; }
 }
 .vs-colon { color: #aaa; }
 
+/* 对战规则教学条（v0.7 首次进入显示） */
+.vs-tutorial {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 12, 5, 0.92);
+  border: 1px solid rgba(255, 215, 122, 0.5);
+  border-radius: 14px;
+  padding: 18px 20px;
+  max-width: 320px;
+  width: 85%;
+  z-index: 60;
+  color: #f5e6c8;
+  font-size: 14px;
+  line-height: 1.7;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  animation: vs-tut-in 0.3s ease-out;
+}
+.vs-tutorial-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffd27a;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.vs-tutorial-row { margin: 4px 0; }
+.vs-tutorial-hint {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  margin-top: 10px;
+}
+@keyframes vs-tut-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 /* 珠子飞入袋子动画 */
 .vs-fly-marble {
   position: fixed;

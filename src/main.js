@@ -209,6 +209,25 @@ function startVs(aiLevel = 1) {
   updateVsHUD(vsGame);
   $('vs-overlay').classList.add('hidden');
   show('vs');
+  // 首次进入显示规则教学条（v0.7）：点击或 6 秒后自动关闭
+  showVsTutorial();
+}
+
+// 显示对战规则教学条
+function showVsTutorial() {
+  const tut = $('vs-tutorial');
+  if (!tut) return;
+  tut.classList.remove('hidden');
+  const dismiss = () => tut.classList.add('hidden');
+  // 点击任意处关闭
+  const onClick = () => { dismiss(); document.removeEventListener('pointerdown', onClick, true); };
+  document.addEventListener('pointerdown', onClick, true);
+  // 6 秒自动关闭
+  clearTimeout(window.__vsTutTimer);
+  window.__vsTutTimer = setTimeout(() => {
+    dismiss();
+    document.removeEventListener('pointerdown', onClick, true);
+  }, 6000);
 }
 
 function updateVsHUD(g) {

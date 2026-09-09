@@ -153,7 +153,7 @@ export class VsRenderer {
     }
   }
 
-  // 检测射击结果，显示反馈
+  // 检测射击结果，显示反馈（v0.7 新规则文案）
   _checkShotFeedback() {
     const ls = this.game.lastShot;
     if (!ls) return;
@@ -165,15 +165,26 @@ export class VsRenderer {
       this._flyMarblesToPouch(ls.wonMarbles || [], ls.shooter);
       if (this.callbacks.onMarbleWon) this.callbacks.onMarbleWon(ls.shooter, ls.knockedOut);
       this.audio.play('hole'); // 清脆一声，表示收入
-      // 连杀：小横幅（不打扰，简短）
-      if (ls.tawInRing) {
-        this._showFeedbackBanner(ls.shooter === 'player' ? '🔥 连击！' : 'AI 连击', true);
+      // 首颗彩珠 → 获得攻击资格，提示（小横幅，简短）——只提示玩家
+      if (ls.knockedOut > 0 && ls.shooter === 'player' && this.game.eligibility?.player && !this._eligibilityNotified) {
+        this._eligibilityNotified = true;
+        this._showFeedbackBanner('⚡ 获得攻击权！可吃对方母弹', true);
       }
     }
-    // 大翻盘（撞飞母弹）：大横幅（值得强调）
-    if (ls.hitOpponentTaw) {
+    // 吃下对方母弹（淘汰）：大横幅（最强反馈）
+    if (ls.ateOpponent) {
       this.audio.play('star');
-      this._showFeedbackBanner(ls.shooter === 'player' ? '💥 撞飞对方母弹！抢走全部！' : '😱 母弹被撞飞！全部被抢走！', false);
+      this._showFeedbackBanner(ls.shooter === 'player' ? '🏆 吃下对方母弹！赢走全部弹珠！' : '💀 你的母弹被吃掉了！战利品全没了！', false);
+    }
+    // 无资格撞出对方母弹 → 对方吐珠
+    else if (ls.oppSpitBack) {
+      this.audio.play('bounce');
+      this._showFeedbackBanner(ls.shooter === 'player' ? '对方母弹出圈！但你还无攻击权，战利品退回圈内' : '你的母弹被撞出！战利品退回圈内', true);
+    }
+    // 母弹停圈内 → 吐珠惩罚
+    if (ls.penaltyStuck) {
+      this.audio.play('bounce');
+      this._showFeedbackBanner(ls.shooter === 'player' ? '⚠️ 母弹停在圈内！吐出全部战利品！' : '⚠️ AI 母弹停在圈内，吐出全部战利品！', true);
     }
   }
 
@@ -469,8 +480,34 @@ export class VsRenderer {
     const pt = this.game.world.balls.find((b) => b.id === 'player_taw');
     // AI 母弹（蓝）
     const at = this.game.world.balls.find((b) => b.id === 'ai_taw');
+    // 资格可视化（v0.7）：获得攻击权 → 金色光圈
+    const elig = this.game.eligibility || {};
+    if (pt && elig.player && !pt.captured) this._drawEligibilityRing(pt, '#ffd700');
+    if (at && elig.ai && !at.captured) this._drawEligibilityRing(at, '#ff6b6b');
     if (pt) this._drawTaw(pt, '#e74c3c', '#ff8a80', '我');
     if (at) this._drawTaw(at, '#3498db', '#a3d5f7', 'AI');
+  }
+
+  // 攻击权光圈：母弹周围发光环（玩家金色 / AI 红色威胁）
+  _drawEligibilityRing(b, color) {
+    const { ctx } = this;
+    const t = performance.now() / 1000;
+    const pulse = 0.75 + Math.sin(t * 3) * 0.25; // 呼吸脉动
+    ctx.save();
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // 外圈淡光
+    ctx.globalAlpha = 0.15 * pulse;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r + 12, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.restore();
   }
 
   _drawTaw(b, base, hl, label) {
