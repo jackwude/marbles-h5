@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#8B5A2B">
+  <title>打弹珠</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 开始页 -->
+  <div id="screen-home" class="screen">
+    <h1 class="title">打弹珠</h1>
+    <p class="subtitle">放学了，蹲下，瞄准——让弹珠进洞！</p>
+    <button class="btn-primary" id="btn-start">开始游戏</button>
+    <button class="btn-secondary" id="btn-skins">我的弹珠</button>
+  </div>
+
+  <!-- 选关页 -->
+  <div id="screen-levels" class="screen hidden">
+    <h2 class="screen-title">选关</h2>
+    <div id="level-grid" class="level-grid"></div>
+    <button class="btn-secondary" id="btn-back-home">返回</button>
+  </div>
+
+  <!-- 皮肤页 -->
+  <div id="screen-skins" class="screen hidden">
+    <h2 class="screen-title">我的弹珠</h2>
+    <div id="skin-list" class="skin-list"></div>
+    <button class="btn-secondary" id="btn-back-skins">返回</button>
+  </div>
+
+  <!-- 对局页 -->
+  <div id="screen-game" class="screen hidden">
+    <div id="game-hud">
+      <button class="hud-btn" id="btn-levels">‹ 选关</button>
+      <div id="hud-info"><span id="hud-level">第 1 关</span> · <span id="hud-shots">剩余 4 次</span></div>
+      <button class="hud-btn" id="btn-restart">↻</button>
+    </div>
+    <canvas id="game-canvas"></canvas>
+    <div id="game-overlay" class="overlay hidden">
+      <div id="result-card" class="result-card">
+        <h3 id="result-title">进洞！</h3>
+        <div id="result-stars" class="stars"></div>
+        <button class="btn-primary" id="btn-next">下一关</button>
+        <button class="btn-secondary" id="btn-replay">重玩本关</button>
+        <button class="btn-link" id="btn-result-levels">选关</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

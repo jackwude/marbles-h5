@@ -12,7 +12,7 @@ export const PHYS = {
   restitution: 0.55,      // 反弹恢复系数
   lowSpeedThreshold: 0.5, // 低于此速度启用额外滚动摩擦
   lowSpeedFriction: 0.98,
-  maxLaunchSpeed: 6,      // 最大发射速度（单位/帧）
+  maxLaunchSpeed: 9,      // 最大发射速度（单位/帧），满力最远 ~570px
   holeCaptureRatio: 0.6,  // 进洞判定 = 圆心距 < 洞半径 × 此值
   stopThreshold: 0.02,    // 低于此速度视为停
 };
