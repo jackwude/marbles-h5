@@ -109,7 +109,42 @@ export function aiDecide(game) {
     const ang = Math.random() * Math.PI * 2;
     return { dirX: Math.cos(ang), dirY: Math.sin(ang), power: 0.3 + Math.random() * 0.6 };
   }
+  // level 1（普通）：70% 概率用"简单启发式"（朝最近彩珠打，会真失误，命中率~真人）
+  // level 2（高手）：基本都用模拟试射（接近完美）
+  if (level === 1 && Math.random() < 0.7) {
+    return aiHeuristic(game);
+  }
   return aiThink(game, level);
+}
+
+// 简单启发式：朝最近的彩珠打，力度估算（误差较大，命中率 ~40%，像新手）
+function aiHeuristic(game) {
+  const world = game.world;
+  const shooterId = game.turn === 'player' ? 'player_taw' : 'ai_taw';
+  const shooter = world.balls.find((b) => b.id === shooterId);
+  const marbles = world.balls.filter((b) => b.id.startsWith('m') && !isOutOfRing(b) && !b.captured);
+  if (!marbles.length) {
+    const ang = Math.random() * Math.PI * 2;
+    return { dirX: Math.cos(ang), dirY: Math.sin(ang), power: 0.5 };
+  }
+  // 选最近的彩珠
+  let best = null, bestDist = Infinity;
+  for (const m of marbles) {
+    const d = Math.hypot(m.x - shooter.x, m.y - shooter.y);
+    if (d < bestDist) { bestDist = d; best = m; }
+  }
+  const dx = best.x - shooter.x, dy = best.y - shooter.y;
+  const dist = Math.hypot(dx, dy);
+  // 角度：朝彩珠 + 大误差（±0.15 rad，容易打偏）
+  const baseAng = Math.atan2(dy, dx);
+  const jitterAng = (Math.random() - 0.5) * 0.3;
+  const ang = baseAng + jitterAng;
+  // 力度：估算 + 大误差（±0.25，可能不够/过头）
+  const edgeDist = Math.hypot(best.x - RING.cx, best.y - RING.cy);
+  const extra = Math.max(20, (RING.r - edgeDist) * 0.5);
+  let power = (dist + extra) / 570 + (Math.random() - 0.5) * 0.5;
+  power = Math.max(0.35, Math.min(1, power));
+  return { dirX: Math.cos(ang), dirY: Math.sin(ang), power };
 }
 
 // AI 思考：克隆世界试射，选"能撞出彩珠/打中母弹"的最优角度力度

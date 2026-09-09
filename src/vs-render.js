@@ -4,16 +4,16 @@ import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, VS_CFG } from './v
 import { WORLD_W, WORLD_H } from './levels.js';
 import { GameAudio } from './render.js';
 
-// 彩珠配色（玻璃质感）
-const MARBLE_COLORS = [
-  ['#e74c3c', '#ff8a80'], // 红
-  ['#2ecc71', '#a5f0c8'], // 绿
-  ['#3498db', '#a3d5f7'], // 蓝
-  ['#f1c40f', '#fff2a8'], // 黄
-  ['#9b59b6', '#d7aef2'], // 紫
-  ['#e67e22', '#ffc08a'], // 橙
-  ['#1abc9c', '#a5f0e4'], // 青
-  ['#e84393', '#f9b7d3'], // 粉
+// 彩珠样式（8 种经典玻璃弹珠，程序化渲染）
+const MARBLE_STYLES = [
+  { type: 'cateye',   base: 'rgba(255,255,255,0.55)', inner: ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db'] }, // 猫眼（四色扇形）
+  { type: 'rainbow',  base: 'rgba(200,230,255,0.5)',  colors: ['#ff0000', '#ff8800', '#ffee00', '#00cc44', '#0088ff', '#8800ff'] }, // 彩虹螺旋
+  { type: 'stripe',   base: 'rgba(255,255,255,0.6)',  stripe: '#e74c3c' }, // 红白条纹
+  { type: 'crystal',  base: 'rgba(180,220,255,0.35)', highlight: 'rgba(255,255,255,0.95)' }, // 透明水晶
+  { type: 'porcelain', base: '#f5e6d3', shadow: 'rgba(160,120,80,0.5)' }, // 不透明瓷珠
+  { type: 'starburst', base: 'rgba(255,220,150,0.6)', star: '#fff200' }, // 星光
+  { type: 'bicolor',  baseA: '#2ecc71', baseB: '#3498db' }, // 双色
+  { type: 'neon',     base: '#ff6ec7', glow: 'rgba(255,110,199,0.5)' }, // 荧光
 ];
 
 export class VsRenderer {
@@ -210,35 +210,183 @@ export class VsRenderer {
     const { ctx } = this;
     const marbles = this.game.world.balls.filter((b) => b.id.startsWith('m'));
     marbles.forEach((m, i) => {
-      // 出圈的战利品：灰色调 + 半透明（表示已赢走）
       const out = this._isOut(m);
-      const colorIdx = parseInt(m.id.slice(1), 10) % MARBLE_COLORS.length;
-      const [base, hl] = MARBLE_COLORS[colorIdx];
+      const style = MARBLE_STYLES[i % MARBLE_STYLES.length];
       ctx.save();
-      if (out) {
-        ctx.globalAlpha = 0.4;
-      }
+      if (out) ctx.globalAlpha = 0.35; // 出圈战利品半透明
       // 阴影
       ctx.beginPath();
       ctx.arc(m.x + 2, m.y + 3, m.r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fill();
-      // 玻璃球体
-      const g = ctx.createRadialGradient(m.x - m.r * 0.35, m.y - m.r * 0.35, m.r * 0.1, m.x, m.y, m.r);
-      g.addColorStop(0, hl);
-      g.addColorStop(0.5, base);
-      g.addColorStop(1, 'rgba(0,0,0,0.3)');
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-      ctx.fillStyle = g;
-      ctx.fill();
-      // 高光
-      ctx.beginPath();
-      ctx.arc(m.x - m.r * 0.3, m.y - m.r * 0.35, m.r * 0.18, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fill();
+      this._drawMarbleStyle(style, m.x, m.y, m.r);
       ctx.restore();
     });
+  }
+
+  // 按样式绘制一颗弹珠
+  _drawMarbleStyle(style, x, y, r) {
+    const { ctx } = this;
+    ctx.save();
+    const clip = () => {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.clip();
+    };
+    switch (style.type) {
+      case 'cateye': {
+        // 半透明底 + 内部四色扇形（经典猫眼）
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        const n = style.inner.length;
+        for (let i = 0; i < n; i++) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.arc(x, y, r * 0.85, (i / n) * Math.PI * 2, ((i + 1) / n) * Math.PI * 2);
+          ctx.closePath();
+          ctx.fillStyle = style.inner[i];
+          ctx.globalAlpha = 0.7;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        // 外圈玻璃边
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        break;
+      }
+      case 'rainbow': {
+        // 彩虹螺旋
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        const n = style.colors.length;
+        for (let i = 0; i < n * 4; i++) {
+          const a0 = (i / (n * 4)) * Math.PI * 2;
+          const a1 = ((i + 1) / (n * 4)) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.arc(x, y, r * (0.2 + 0.8 * (i % 4) / 4), a0, a1);
+          ctx.closePath();
+          ctx.fillStyle = style.colors[i % n];
+          ctx.globalAlpha = 0.8;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        break;
+      }
+      case 'stripe': {
+        // 条纹珠
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.fillStyle = style.stripe;
+        ctx.globalAlpha = 0.8;
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.ellipse(x, y + i * r * 0.4, r * 1.05, r * 0.22, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'crystal': {
+        // 透明水晶：浅色底 + 强高光 + 折射光斑
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        // 底部折射光斑
+        ctx.beginPath();
+        ctx.ellipse(x + r * 0.3, y + r * 0.4, r * 0.4, r * 0.25, 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fill();
+        // 边缘暗化
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(120,160,200,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        break;
+      }
+      case 'porcelain': {
+        // 不透明瓷珠：磨砂无透射
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        // 细腻颗粒感
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
+        for (let i = 0; i < 12; i++) {
+          ctx.beginPath();
+          ctx.arc(x + (Math.sin(i * 37) * r * 0.7), y + (Math.cos(i * 53) * r * 0.7), r * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'starburst': {
+        // 星光珠
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.fillStyle = style.star;
+        ctx.globalAlpha = 0.9;
+        // 四角星
+        const starR = r * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - starR);
+        ctx.quadraticCurveTo(x + r * 0.12, y - r * 0.12, x + starR, y);
+        ctx.quadraticCurveTo(x + r * 0.12, y + r * 0.12, x, y + starR);
+        ctx.quadraticCurveTo(x - r * 0.12, y + r * 0.12, x - starR, y);
+        ctx.quadraticCurveTo(x - r * 0.12, y - r * 0.12, x, y - starR);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'bicolor': {
+        // 双色珠：左半绿右半蓝
+        clip();
+        ctx.fillStyle = style.baseA;
+        ctx.fillRect(x - r, y - r, r, r * 2);
+        ctx.fillStyle = style.baseB;
+        ctx.fillRect(x, y - r, r, r * 2);
+        // 分界线
+        ctx.beginPath();
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x, y + r);
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        break;
+      }
+      case 'neon': {
+        // 荧光珠：亮色 + 外发光
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.6, 0, Math.PI * 2);
+        ctx.fillStyle = style.glow;
+        ctx.fill();
+        clip();
+        ctx.fillStyle = style.base;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath();
+        ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+    }
+    // 公共玻璃质感：高光点 + 底部反光
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + r * 0.25, y + r * 0.35, r * 0.12, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fill();
+    ctx.restore();
   }
 
   _drawTaws() {
