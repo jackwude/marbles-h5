@@ -97,7 +97,7 @@ function startLevel(levelId) {
       onCaptured: (g) => onCaptured(g),
       onOut: () => onOut(),
       onStateChange: (g) => updateHUD(g),
-    });
+    }, audio); // 复用同一个 GameAudio，避免双 AudioContext
   }
   window.__renderer = renderer; // 调试用
   window.__game = game;

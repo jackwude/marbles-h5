@@ -4,12 +4,12 @@ import { WORLD_W, WORLD_H } from './levels.js';
 import { SKINS } from './skins.js';
 
 export class GameRenderer {
-  constructor(canvas, game, callbacks) {
+  constructor(canvas, game, callbacks, audio) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.game = game;
     this.callbacks = callbacks; // { onCaptured, onOut, onStateChange }
-    this.audio = new GameAudio();
+    this.audio = audio || new GameAudio();
     this.scale = 1;
     this.offsetX = 0;
     this.offsetY = 0;
