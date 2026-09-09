@@ -12,7 +12,8 @@
   <div id="screen-home" class="screen">
     <h1 class="title">打弹珠</h1>
     <p class="tagline">放学了，掏出兜里的弹珠——蹲下，瞄准，今天要让它们全部进洞。</p>
-    <button class="btn-primary" id="btn-start">开始游戏</button>
+    <button class="btn-primary" id="btn-start">闯关模式</button>
+    <button class="btn-primary" id="btn-vs">⚔ 对战 AI</button>
     <button class="btn-secondary" id="btn-skins">我的弹珠</button>
   </div>
 
@@ -52,9 +53,28 @@
     </div>
   </div>
 
-  <!-- 版本号（右下角，便于确认更新） -->
-  <div id="version-badge">v0.5.0</div>
+  <!-- 对战页 -->
+  <div id="screen-vs" class="screen hidden">
+    <div id="vs-hud">
+      <button class="hud-btn" id="btn-vs-home">‹ 返回</button>
+      <div id="vs-scores"><span id="vs-score-player" class="vs-score vs-player">我 0</span> : <span id="vs-score-ai" class="vs-score vs-ai">AI 0</span></div>
+      <button class="hud-btn" id="btn-vs-restart">↻</button>
+    </div>
+    <div id="vs-turn-banner" class="vs-turn-banner">轮到你了</div>
+    <canvas id="vs-canvas"></canvas>
+    <div id="vs-overlay" class="overlay hidden">
+      <div id="vs-result-card" class="result-card">
+        <h3 id="vs-result-title">胜利！</h3>
+        <div id="vs-result-detail" class="vs-result-detail"></div>
+        <button class="btn-primary" id="btn-vs-again">再战一局</button>
+        <button class="btn-link" id="btn-vs-home2">返回首页</button>
+      </div>
+    </div>
+  </div>
 
-  <script type="module" src="src/main.js?v=0.5.0"></script>
+  <!-- 版本号（右下角，便于确认更新） -->
+  <div id="version-badge">v0.6.0</div>
+
+  <script type="module" src="src/main.js?v=0.6.0"></script>
 </body>
 </html>

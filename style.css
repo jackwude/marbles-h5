@@ -198,8 +198,7 @@ body { display: flex; align-items: center; justify-content: center; }
   opacity: 0.9;
 }
 
-/* 版本号徽章（右下角） */
-#version-badge {  position: fixed;
+/* 版本号徽章（右下角） */#version-badge {  position: fixed;
   right: 8px;
   bottom: calc(env(safe-area-inset-bottom) + 6px);
   font-size: 10px;
@@ -234,4 +233,68 @@ body { display: flex; align-items: center; justify-content: center; }
 @keyframes tipFade {
   from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ===== 对战模式 ===== */
+#screen-vs { position: relative; }
+#vs-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.3);
+}
+#vs-scores {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.vs-score { padding: 2px 10px; border-radius: 999px; }
+.vs-player { background: rgba(231,76,60,0.3); color: #ff8a80; }
+.vs-ai { background: rgba(52,152,219,0.3); color: #8ac4ff; }
+#vs-canvas {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 120px);
+  touch-action: none;
+}
+.vs-turn-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,210,122,0.9);
+  color: #4a2a0a;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 999px;
+  z-index: 15;
+  pointer-events: none;
+}
+.vs-turn-banner.vs-ai-turn {
+  background: rgba(138,196,255,0.9);
+  color: #123;
+}
+.vs-result-detail {
+  margin-top: 8px;
+  font-size: 15px;
+  color: #ddd;
+  text-align: center;
+}
+.vs-score-line {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.vs-result-sub {
+  font-size: 13px;
+  color: #aaa;
+  margin-top: 4px;
 }

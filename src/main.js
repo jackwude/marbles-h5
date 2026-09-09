@@ -3,6 +3,8 @@ import { createGame, GameState, starsFor, restart } from './game.js';
 import { LEVELS } from './levels.js';
 import { GameRenderer, GameAudio } from './render.js';
 import { SKINS, SKIN_ORDER } from './skins.js';
+import { createVsGame, vsRestart, VsState } from './vs.js';
+import { VsRenderer } from './vs-render.js';
 
 const $ = (id) => document.getElementById(id);
 const SAVE_KEY = 'marbles-h5-save-v1';
@@ -30,7 +32,7 @@ function show(id) {
   Object.keys(screens).forEach((k) => screens[k].classList.add('hidden'));
   screens[id].classList.remove('hidden');
 }
-['home', 'levels', 'skins', 'game'].forEach((id) => screens[id] = $(`screen-${id}`));
+['home', 'levels', 'skins', 'game', 'vs'].forEach((id) => screens[id] = $(`screen-${id}`));
 
 // ===== 选关网格 =====
 function buildLevelGrid() {
@@ -185,6 +187,64 @@ function onOut(g) {
   $('game-overlay').classList.remove('hidden');
 }
 
+// ===== 对战模式 =====
+let vsRenderer = null;
+let vsGame = null;
+let vsAiLevel = 1;
+
+function startVs(aiLevel = 1) {
+  vsAiLevel = aiLevel;
+  vsGame = createVsGame({ aiLevel });
+  if (!audio) audio = new GameAudio();
+  audio.startAmbience();
+  if (vsRenderer) { vsRenderer.game = vsGame; vsRenderer._gameOverNotified = false; }
+  else {
+    vsRenderer = new VsRenderer($('vs-canvas'), vsGame, {
+      onStateChange: (g) => updateVsHUD(g),
+      onGameOver: (g) => onVsGameOver(g),
+    }, audio);
+  }
+  window.__vsGame = vsGame;
+  window.__vsRenderer = vsRenderer;
+  updateVsHUD(vsGame);
+  $('vs-overlay').classList.add('hidden');
+  show('vs');
+}
+
+function updateVsHUD(g) {
+  $('vs-score-player').textContent = `我 ${g.scores.player}`;
+  $('vs-score-ai').textContent = `AI ${g.scores.ai}`;
+  // 回合横幅
+  const banner = $('vs-turn-banner');
+  if (g.state === VsState.PLAYER_AIM) {
+    banner.textContent = '轮到你了！拖拽瞄准';
+    banner.classList.remove('vs-ai-turn');
+  } else if (g.state === VsState.AI_AIM) {
+    banner.textContent = 'AI 思考中…';
+    banner.classList.add('vs-ai-turn');
+  } else if (g.state === VsState.GAME_OVER) {
+    banner.textContent = '';
+  }
+}
+
+function onVsGameOver(g) {
+  $('vs-overlay').classList.remove('hidden');
+  const title = $('vs-result-title');
+  const detail = $('vs-result-detail');
+  if (g.winner === 'player') {
+    title.textContent = '🎉 你赢了！';
+    title.style.color = '#ffd27a';
+  } else if (g.winner === 'ai') {
+    title.textContent = '😤 AI 赢了';
+    title.style.color = '#8ac4ff';
+  } else {
+    title.textContent = '🤝 平局';
+    title.style.color = '#fff';
+  }
+  detail.innerHTML = `<div class="vs-score-line"><span class="vs-score vs-player">我 ${g.scores.player}</span> : <span class="vs-score vs-ai">AI ${g.scores.ai}</span></div>
+    <div class="vs-result-sub">圈内彩珠已清空，${g.scores.player === g.scores.ai ? '平分秋色' : (g.scores.player > g.scores.ai ? '你赢走了更多弹珠！' : 'AI 赢走了更多弹珠…')}</div>`;
+}
+
 // ===== 事件绑定 =====
 $('btn-start').onclick = () => { buildLevelGrid(); show('levels'); if (!audio) { audio = new GameAudio(); } audio.startAmbience(); };
 $('btn-skins').onclick = () => { buildSkins(); show('skins'); };
@@ -197,6 +257,17 @@ $('btn-restart').onclick = () => {
 $('btn-next').onclick = () => startLevel(currentLevelId + 1);
 $('btn-replay').onclick = () => startLevel(currentLevelId);
 $('btn-result-levels').onclick = () => { buildLevelGrid(); show('levels'); };
+
+// ===== 对战事件 =====
+$('btn-vs').onclick = () => startVs(1);
+$('btn-vs-home').onclick = () => show('home');
+$('btn-vs-home2').onclick = () => show('home');
+$('btn-vs-restart').onclick = () => {
+  if (vsGame) { vsRestart(vsGame, { aiLevel: vsAiLevel }); vsRenderer._gameOverNotified = false; updateVsHUD(vsGame); $('vs-overlay').classList.add('hidden'); }
+};
+$('btn-vs-again').onclick = () => {
+  if (vsGame) { vsRestart(vsGame, { aiLevel: vsAiLevel }); vsRenderer._gameOverNotified = false; updateVsHUD(vsGame); $('vs-overlay').classList.add('hidden'); }
+};
 
 // ===== 启动 =====
 show('home');
