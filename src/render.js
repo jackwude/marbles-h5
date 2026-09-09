@@ -1,5 +1,5 @@
 // 渲染层：Canvas 绘制 + 输入 + 音效（怀旧写实风，全程序化）
-import { GameState, setAim, fire, update, settle, starsFor, getTrajectory } from './game.js';
+import { GameState, setAim, fire, update, settle, starsFor } from './game.js';
 import { WORLD_W, WORLD_H } from './levels.js';
 import { SKINS } from './skins.js';
 
@@ -75,9 +75,11 @@ export class GameRenderer {
     }
   }
   _updateAim(e) {
+    // 任意位置起手拖拽：拖向量 = 当前点 - 起手点（反向：往左拖 = 往右发射）
     const dx = e.clientX - this._startX;
     const dy = e.clientY - this._startY;
-    const maxDrag = Math.min(this.viewW, this.viewH) * 0.28;
+    // 拖拽允许超出屏幕边缘（clamp 到窗口内，保证边缘也能满力）
+    const maxDrag = Math.min(this.viewW, this.viewH) * 0.35;
     setAim(this.game, dx, dy, maxDrag);
   }
 
@@ -273,27 +275,36 @@ export class GameRenderer {
     if (this.game.state !== GameState.AIM || this.game.power <= 0) return;
     const { ctx } = this;
     const b = this.game.world.balls[0];
-    // 力度环
+    // 力度环（围绕弹珠，角度 = 力度）
     ctx.save();
     ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r + 6, 0, Math.PI * 2 * this.game.power);
+    ctx.arc(b.x, b.y, b.r + 8, 0, Math.PI * 2 * this.game.power);
     ctx.strokeStyle = '#ffd27a';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.stroke();
     ctx.restore();
-    // 瞄准虚线轨迹
-    const path = getTrajectory(this.game);
+    // 方向箭头（固定短长度，只指示方向，不预测轨迹）
+    const dir = this.game.aimDir;
+    const len = b.r * 2.2; // 固定长度，与力度无关
+    const ax = b.x + dir.x * len;
+    const ay = b.y + dir.y * len;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 7]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    path.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    });
+    ctx.moveTo(b.x + dir.x * b.r, b.y + dir.y * b.r);
+    ctx.lineTo(ax, ay);
     ctx.stroke();
-    ctx.setLineDash([]);
+    // 箭头头部
+    const ang = Math.atan2(dir.y, dir.x);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - Math.cos(ang - 0.5) * 8, ay - Math.sin(ang - 0.5) * 8);
+    ctx.lineTo(ax - Math.cos(ang + 0.5) * 8, ay - Math.sin(ang + 0.5) * 8);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
     ctx.restore();
   }
 }
