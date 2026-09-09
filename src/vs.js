@@ -18,10 +18,21 @@ export const VsState = {
 };
 
 export const RING = {
-  cx: WORLD_W / 2,          // 圈中心
-  cy: WORLD_H / 2,
-  r: 190,                   // 圈半径
+  cx: WORLD_W / 2,          // 圈中心（水平居中）
+  cy: WORLD_H * 0.38,       // 圈中心（偏上，给下方起始线留空间）
+  r: 170,                   // 圈半径
   // 出圈判定：圆心距 > r + 珠半径 视为出圈（完全滚出圈外）
+};
+
+// 起始线位置（下方）
+export const START_LINE = {
+  y: WORLD_H - 90,          // 起始线 y（下方）
+};
+
+// 母珠初始位置（起始线上）
+const TAW_START = {
+  player: { x: WORLD_W * 0.3, y: START_LINE.y },   // 玩家左下
+  ai: { x: WORLD_W * 0.7, y: START_LINE.y },       // AI 右下
 };
 
 export const VS_CFG = {
@@ -35,10 +46,10 @@ export const VS_CFG = {
 // 创建对战局
 export function createVsGame({ aiLevel = 1 } = {}) {
   const balls = [];
-  // 玩家母弹（红）
-  balls.push(makeBall('player_taw', 120, WORLD_H / 2, VS_CFG.tawR));
-  // AI 母弹（蓝）
-  balls.push(makeBall('ai_taw', WORLD_W - 120, WORLD_H / 2, VS_CFG.tawR));
+  // 玩家母珠（红）——起始线上（左下）
+  balls.push(makeBall('player_taw', TAW_START.player.x, TAW_START.player.y, VS_CFG.tawR));
+  // AI 母珠（蓝）——起始线上（右下）
+  balls.push(makeBall('ai_taw', TAW_START.ai.x, TAW_START.ai.y, VS_CFG.tawR));
   // 彩珠（圈内随机分布，不重叠、不在母弹上）
   const cx = RING.cx, cy = RING.cy, r = RING.r;
   let placed = 0;
@@ -223,10 +234,12 @@ export function evaluateShot(game, shot) {
     if (isOutOfRing(m)) knockedOut++;
   }
   const tawInRing = Math.hypot(shooter.x - RING.cx, shooter.y - RING.cy) < RING.r;
-  // 评分（v2.0"打倒赢珠"）：撞出彩珠越多越好；
-  // 撞出 + 停圈内 = 连打（+3 奖励）；停圈内但没撞出 = missed（无价值）
+  // 评分（v2.1 用户确认）：撞出彩珠越多越好；
+  // 击出 + 母珠出圈 = 连打（+5 奖励，AI 追求"打中且母珠滚出圈"）；
+  // 母珠停圈内 = 惩罚（-8，AI 避免）
   let score = knockedOut * 10;
-  if (knockedOut > 0 && tawInRing) score += 3; // 连打奖励
+  if (knockedOut > 0 && !tawInRing) score += 5; // 连打奖励（出圈）
+  if (tawInRing) score -= 8; // 停圈内 = 惩罚
   if (levelHigh(game) && knockedOut === 0 && !tawInRing) score -= 5; // 高手避免无用射击
   return { score, knockedOut, tawInRing };
 }
@@ -247,12 +260,13 @@ export function vsUpdate(game, dt = 1) {
 }
 
 // 射击结束：判定结果，切换回合
-// 规则（v2.0 定稿"打倒赢珠"，marbles-h5-VS-RULES.md）：
+// 规则（v2.1 定稿，用户确认，marbles-h5-VS-RULES.md）：
 //  1. 撞出彩珠（圆心过圈线）→ 归射手（+1 分，飞入袋子）
-//  2. 连打：本轮撞出 ≥1 颗 且 母珠停圈内 → 继续本回合
-//  3. 换人：母珠出圈（惩罚，回合结束）或 没撞出彩珠（母珠停圈内没打中）→ 换人
-//  4. 不攻击对方母珠（母珠只是工具）
-//  5. 胜负：圈内彩珠清空，最多者胜；回合上限 40
+//  2. 连打：击出 ≥1 颗 **且** 母珠出圈 → 继续本回合（从母珠出圈处）
+//  3. 母珠停圈内（不管击出与否）→ 惩罚：换人 + 母珠重置回起始线
+//  4. 母珠出圈但没击出 → 换人，母珠留在出圈处（下次从那继续）
+//  5. 不攻击对方母珠（母珠只是工具）
+//  6. 胜负：圈内彩珠清空，最多者胜；回合上限 40
 function resolveShot(game) {
   const shooterId = game.turn === 'player' ? 'player_taw' : 'ai_taw';
   const shooter = game.world.balls.find((b) => b.id === shooterId);
@@ -284,29 +298,31 @@ function resolveShot(game) {
     knockedOut,
     wonMarbles,
     tawInRing: shooterInRing,
-    // 连打 = 撞出彩珠 且 母珠停圈内
-    combo: knockedOut > 0 && shooterInRing,
-    // 母珠出圈（惩罚，回合结束换人）
-    tawOut: !shooterInRing,
-    // 没撞出（母珠停圈内但没打中，回合结束换人）
-    missed: knockedOut === 0 && shooterInRing,
+    // 连打 = 击出 ≥1 颗 且 母珠出圈（母珠滚出圈 = 安全完成一击）
+    combo: knockedOut > 0 && !shooterInRing,
+    // 母珠停圈内（惩罚，换人 + 重置起始线）
+    stuckInRing: shooterInRing,
+    // 母珠出圈但没击出（换人，母珠留在出圈处）
+    tawOutNoHit: !shooterInRing && knockedOut === 0,
   };
 
-  // 2. 连打：撞出 ≥1 颗 且 母珠停圈内 → 继续本回合
-  if (knockedOut > 0 && shooterInRing) {
+  // 2. 连打：击出 ≥1 颗 且 母珠出圈 → 继续本回合（从母珠出圈处）
+  if (knockedOut > 0 && !shooterInRing) {
     game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
     return; // 不换边，不重置母珠，从母珠当前位置继续
   }
 
-  // 3. 换人：母珠出圈（惩罚）或 没撞出（停圈内没打中）
+  // 3/4. 换人
   game.turn = game.turn === 'player' ? 'ai' : 'player';
   game.turnCount++;
-  // 重置母珠：出圈的母珠（自己滚出圈）回到圈外起点；没撞出停圈内的母珠留在原地（下回合从落点继续）
-  for (const tawId of ['player_taw', 'ai_taw']) {
-    const tb = game.world.balls.find((b) => b.id === tawId);
-    if (tb && !tb.captured && isOutOfRing(tb)) {
-      tb.x = tawId === 'player_taw' ? 120 : WORLD_W - 120;
-      tb.y = WORLD_H / 2;
+  // 3. 母珠停圈内（惩罚）→ 重置回起始线（起始线在下，玩家左 AI 右）
+  // 4. 母珠出圈但没击出 → 母珠留在出圈处（不重置）
+  if (shooterInRing) {
+    // 惩罚：重置回起始线（玩家在下左，AI 在下右）
+    const tb = game.world.balls.find((b) => b.id === shooterId);
+    if (tb) {
+      tb.x = shooterId === 'player_taw' ? WORLD_W * 0.3 : WORLD_W * 0.7;
+      tb.y = WORLD_H - 80; // 起始线在下
       tb.vx = 0; tb.vy = 0;
     }
   }

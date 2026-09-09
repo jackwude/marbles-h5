@@ -92,9 +92,9 @@ test('重开保留 AI 难度', () => {
   assert.strictEqual(g.state, VsState.PLAYER_AIM);
 });
 
-// ===== v2.0 测试（"打倒赢珠"：连打 / 出圈惩罚 / 不攻击母珠）=====
+// ===== v2.1 测试（用户确认：连打=击出+出圈 / 停圈=惩罚重置 / 出圈没击出=留原地）=====
 
-test('v2.0：撞出彩珠 → 归射手 +1 分', () => {
+test('v2.1：撞出彩珠 → 归射手 +1 分', () => {
   const g = createVsGame();
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
   const m = g.world.balls.find((b) => b.id.startsWith('m'));
@@ -108,11 +108,11 @@ test('v2.0：撞出彩珠 → 归射手 +1 分', () => {
   assert.strictEqual(m.owner, 'player', '彩珠归玩家');
 });
 
-test('v2.0：连打（撞出彩珠 + 母珠停圈内）→ 继续本回合', () => {
+test('v2.1：连打（击出彩珠 + 母珠出圈）→ 继续本回合', () => {
   const g = createVsGame();
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
   const m = g.world.balls.find((b) => b.id.startsWith('m'));
-  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠停在圈内
+  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠出圈
   m.x = RING.cx + RING.r + 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠出圈
   m.captured = false; m.owner = null;
   g.state = VsState.PLAYER_ROLLING;
@@ -123,27 +123,28 @@ test('v2.0：连打（撞出彩珠 + 母珠停圈内）→ 继续本回合', () 
   assert.ok(g.lastShot.combo === true, 'combo 标记');
 });
 
-test('v2.0：母珠出圈（惩罚）→ 回合结束换人 + 母珠重置', () => {
+test('v2.1：母珠停圈内（惩罚）→ 回合结束换人 + 重置回起始线', () => {
   const g = createVsGame();
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
   const m = g.world.balls.find((b) => b.id.startsWith('m'));
-  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠出圈
-  m.x = RING.cx - 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠在圈内（没撞出）
+  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠停在圈内
+  m.x = RING.cx + RING.r + 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠出圈（但母珠停圈内 = 惩罚）
   m.captured = false; m.owner = null;
   g.state = VsState.PLAYER_ROLLING;
   vsUpdate(g, 1);
   assert.strictEqual(g.turn, 'ai', '换到 AI');
   assert.strictEqual(g.state, VsState.AI_AIM, 'AI 回合');
-  assert.ok(g.lastShot.tawOut === true, 'tawOut 标记');
-  // 母珠重置回圈外起点
+  assert.ok(g.lastShot.stuckInRing === true, 'stuckInRing 标记');
+  assert.ok(g.lastShot.combo === false, '不是连打（停圈内）');
+  // 母珠重置回起始线（下方，玩家左下）
   const pt2 = g.world.balls.find((b) => b.id === 'player_taw');
-  assert.strictEqual(pt2.x, 120, '母珠重置回左侧起点');
+  assert.ok(pt2.y > RING.cy, '母珠重置到下方起始线');
 });
 
-test('v2.0：没撞出（母珠停圈内没打中）→ 换人但母珠留原地', () => {
+test('v2.1：母珠出圈但没击出 → 换人但母珠留原地', () => {
   const g = createVsGame();
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
-  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠停在圈内
+  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠出圈
   // 所有彩珠都在圈内（没撞出）
   for (const m of g.world.balls.filter((b) => b.id.startsWith('m'))) {
     m.x = RING.cx + (Math.random() - 0.5) * 100;
@@ -152,15 +153,15 @@ test('v2.0：没撞出（母珠停圈内没打中）→ 换人但母珠留原地
   }
   g.state = VsState.PLAYER_ROLLING;
   vsUpdate(g, 1);
-  assert.strictEqual(g.turn, 'ai', '没撞出 → 换人');
-  assert.ok(g.lastShot.missed === true, 'missed 标记');
+  assert.strictEqual(g.turn, 'ai', '出圈没击出 → 换人');
+  assert.ok(g.lastShot.tawOutNoHit === true, 'tawOutNoHit 标记');
   assert.ok(g.lastShot.combo === false, '不是连打');
-  // 母珠留原地（没出圈不重置）
+  // 母珠留原地（出圈但没击出，不重置）
   const pt2 = g.world.balls.find((b) => b.id === 'player_taw');
-  assert.strictEqual(pt2.x, RING.cx, '母珠停圈内没打中 → 留原地');
+  assert.strictEqual(pt2.x, RING.cx + RING.r + 50, '母珠留在出圈处');
 });
 
-test('v2.0：不攻击对方母珠（母珠互撞不算分）', () => {
+test('v2.1：不攻击对方母珠（母珠互撞不算分）', () => {
   const g = createVsGame();
   // 玩家母珠撞到 AI 母珠（但 AI 母珠出圈）→ 不应有任何得分/淘汰
   const pt = g.world.balls.find((b) => b.id === 'player_taw');

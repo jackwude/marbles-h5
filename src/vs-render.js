@@ -1,6 +1,6 @@
 // 对战模式渲染层：Canvas 绘制 + 输入 + AI 回合驱动
 // 复用 render.js 的 GameAudio；逻辑全在 vs.js（纯函数）
-import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, VS_CFG } from './vs.js';
+import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, START_LINE, VS_CFG } from './vs.js';
 import { WORLD_W, WORLD_H } from './levels.js';
 import { GameAudio } from './render.js';
 
@@ -153,7 +153,7 @@ export class VsRenderer {
     }
   }
 
-  // 检测射击结果，显示反馈（v2.0"打倒赢珠"文案）
+  // 检测射击结果，显示反馈（v2.1 用户确认文案）
   _checkShotFeedback() {
     const ls = this.game.lastShot;
     if (!ls) return;
@@ -166,20 +166,20 @@ export class VsRenderer {
       if (this.callbacks.onMarbleWon) this.callbacks.onMarbleWon(ls.shooter, ls.knockedOut);
       this.audio.play('hole'); // 清脆一声，表示收入
     }
-    // 连打（撞出彩珠 + 母珠停圈内）：小横幅（不打扰，简短）
+    // 连打（击出彩珠 + 母珠出圈）：小横幅
     if (ls.combo) {
       this.audio.play('star');
-      this._showFeedbackBanner(ls.shooter === 'player' ? '🔥 连打！继续弹！' : 'AI 连打！继续', true);
+      this._showFeedbackBanner(ls.shooter === 'player' ? '🎯 打中了！继续弹！' : 'AI 打中了，继续！', true);
     }
-    // 母珠出圈（惩罚）：回合结束换人
-    else if (ls.tawOut) {
+    // 母珠停圈内（惩罚）：换人 + 重置起始线
+    else if (ls.stuckInRing) {
       this.audio.play('bounce');
-      this._showFeedbackBanner(ls.shooter === 'player' ? '📤 母珠出圈！回合结束' : 'AI 母珠出圈，回合结束', true);
+      this._showFeedbackBanner(ls.shooter === 'player' ? '⚠️ 母珠停在圈内！回合结束，回到起始线' : '⚠️ AI 母珠停在圈内，回起始线', true);
     }
-    // 没撞出（母珠停圈内没打中）：换人
-    else if (ls.missed) {
+    // 母珠出圈但没击出（白打）：换人，母珠留原地
+    else if (ls.tawOutNoHit) {
       this.audio.play('bounce');
-      this._showFeedbackBanner(ls.shooter === 'player' ? '😅 没打中，轮到 AI' : 'AI 没打中，轮到你了', true);
+      this._showFeedbackBanner(ls.shooter === 'player' ? '📤 母珠出圈，没打中，轮到 AI' : 'AI 母珠出圈，没打中，轮到你了', true);
     }
   }
 
@@ -283,6 +283,20 @@ export class VsRenderer {
     ctx.arc(RING.cx, RING.cy, RING.r, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,240,200,0.12)';
     ctx.fill();
+    // 起始线（下方）
+    ctx.beginPath();
+    ctx.moveTo(40, START_LINE.y);
+    ctx.lineTo(WORLD_W - 40, START_LINE.y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 起始线标签
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('起始线', WORLD_W / 2, START_LINE.y - 10);
     ctx.restore();
   }
 
