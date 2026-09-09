@@ -92,97 +92,90 @@ test('重开保留 AI 难度', () => {
   assert.strictEqual(g.state, VsState.PLAYER_AIM);
 });
 
-// ===== 新规则测试（v0.7 定稿：中国圈内规则）=====
+// ===== v2.0 测试（"打倒赢珠"：连打 / 出圈惩罚 / 不攻击母珠）=====
 
-test('新规则：击出彩珠获得资格（eligibility）', () => {
+test('v2.0：撞出彩珠 → 归射手 +1 分', () => {
   const g = createVsGame();
-  // 初始无资格
-  assert.strictEqual(g.eligibility.player, false);
-  assert.strictEqual(g.eligibility.ai, false);
-  // 直接调用内部逻辑：构造场景——玩家击出一颗彩珠出圈
-  // 通过模拟：把玩家母弹移到圈内，一颗彩珠移到圈外，触发 resolveShot
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
   const m = g.world.balls.find((b) => b.id.startsWith('m'));
-  pt.x = RING.cx - 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母弹在圈内
+  pt.x = RING.cx - 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠在圈内
   m.x = RING.cx + RING.r + 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠出圈
   m.captured = false; m.owner = null;
   g.state = VsState.PLAYER_ROLLING;
   vsUpdate(g, 1); // 触发 resolveShot
-  assert.strictEqual(g.eligibility.player, true, '击出彩珠后玩家应获得资格');
-  assert.strictEqual(g.scores.player, 1);
+  assert.strictEqual(g.scores.player, 1, '撞出彩珠归射手');
+  assert.strictEqual(g.inRing, 7, '圈内减少 1');
+  assert.strictEqual(m.owner, 'player', '彩珠归玩家');
 });
 
-test('新规则：母弹停圈内 → 吐出战利品', () => {
+test('v2.0：连打（撞出彩珠 + 母珠停圈内）→ 继续本回合', () => {
   const g = createVsGame();
-  // 玩家先赢 2 颗（模拟 owner + 分数）
-  const ms = g.world.balls.filter((b) => b.id.startsWith('m'));
-  ms[0].owner = 'player'; ms[0].captured = true; ms[0].outOfRing = true;
-  ms[1].owner = 'player'; ms[1].captured = true; ms[1].outOfRing = true;
-  ms[0].x = RING.cx + RING.r + 20; ms[0].y = RING.cy;
-  ms[1].x = RING.cx + RING.r + 30; ms[1].y = RING.cy;
-  g.scores.player = 2;
-  g.eligibility.player = true;
-  g.inRing = 6;
-  // 玩家母弹停在圈内（没击出新珠）
   const pt = g.world.balls.find((b) => b.id === 'player_taw');
-  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0;
+  const m = g.world.balls.find((b) => b.id.startsWith('m'));
+  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠停在圈内
+  m.x = RING.cx + RING.r + 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠出圈
+  m.captured = false; m.owner = null;
   g.state = VsState.PLAYER_ROLLING;
   vsUpdate(g, 1);
-  // 惩罚：吐出 2 颗，分数归 0，圈内恢复 8
-  assert.strictEqual(g.scores.player, 0, '母弹停圈内应吐出全部战利品');
-  assert.strictEqual(g.inRing, 8, '吐出的珠子应放回圈内');
-  const stillOwned = g.world.balls.filter((b) => b.owner === 'player');
-  assert.strictEqual(stillOwned.length, 0, '玩家不应再有战利品');
+  assert.strictEqual(g.scores.player, 1, '撞出 1 颗');
+  assert.strictEqual(g.state, VsState.PLAYER_AIM, '连打：继续玩家回合');
+  assert.strictEqual(g.turn, 'player', '不换边');
+  assert.ok(g.lastShot.combo === true, 'combo 标记');
 });
 
-test('新规则：无资格撞出对方母弹 → 对方吐珠但可继续', () => {
+test('v2.0：母珠出圈（惩罚）→ 回合结束换人 + 母珠重置', () => {
   const g = createVsGame();
-  // AI 先赢 2 颗
-  const ms = g.world.balls.filter((b) => b.id.startsWith('m'));
-  ms[0].owner = 'ai'; ms[0].captured = true; ms[0].outOfRing = true;
-  ms[1].owner = 'ai'; ms[1].captured = true; ms[1].outOfRing = true;
-  ms[0].x = RING.cx + RING.r + 20; ms[0].y = RING.cy;
-  ms[1].x = RING.cx + RING.r + 30; ms[1].y = RING.cy;
-  g.scores.ai = 2;
-  g.eligibility.ai = true;
-  g.inRing = 6;
-  // 玩家（无资格）撞出 AI 母弹
+  const pt = g.world.balls.find((b) => b.id === 'player_taw');
+  const m = g.world.balls.find((b) => b.id.startsWith('m'));
+  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠出圈
+  m.x = RING.cx - 30; m.y = RING.cy; m.vx = 0; m.vy = 0; // 彩珠在圈内（没撞出）
+  m.captured = false; m.owner = null;
+  g.state = VsState.PLAYER_ROLLING;
+  vsUpdate(g, 1);
+  assert.strictEqual(g.turn, 'ai', '换到 AI');
+  assert.strictEqual(g.state, VsState.AI_AIM, 'AI 回合');
+  assert.ok(g.lastShot.tawOut === true, 'tawOut 标记');
+  // 母珠重置回圈外起点
+  const pt2 = g.world.balls.find((b) => b.id === 'player_taw');
+  assert.strictEqual(pt2.x, 120, '母珠重置回左侧起点');
+});
+
+test('v2.0：没撞出（母珠停圈内没打中）→ 换人但母珠留原地', () => {
+  const g = createVsGame();
+  const pt = g.world.balls.find((b) => b.id === 'player_taw');
+  pt.x = RING.cx; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 母珠停在圈内
+  // 所有彩珠都在圈内（没撞出）
+  for (const m of g.world.balls.filter((b) => b.id.startsWith('m'))) {
+    m.x = RING.cx + (Math.random() - 0.5) * 100;
+    m.y = RING.cy + (Math.random() - 0.5) * 100;
+    m.vx = 0; m.vy = 0; m.captured = false; m.owner = null;
+  }
+  g.state = VsState.PLAYER_ROLLING;
+  vsUpdate(g, 1);
+  assert.strictEqual(g.turn, 'ai', '没撞出 → 换人');
+  assert.ok(g.lastShot.missed === true, 'missed 标记');
+  assert.ok(g.lastShot.combo === false, '不是连打');
+  // 母珠留原地（没出圈不重置）
+  const pt2 = g.world.balls.find((b) => b.id === 'player_taw');
+  assert.strictEqual(pt2.x, RING.cx, '母珠停圈内没打中 → 留原地');
+});
+
+test('v2.0：不攻击对方母珠（母珠互撞不算分）', () => {
+  const g = createVsGame();
+  // 玩家母珠撞到 AI 母珠（但 AI 母珠出圈）→ 不应有任何得分/淘汰
+  const pt = g.world.balls.find((b) => b.id === 'player_taw');
   const at = g.world.balls.find((b) => b.id === 'ai_taw');
-  at.x = RING.cx + RING.r + 30; at.y = RING.cy; at.vx = 0; at.vy = 0; // AI 母弹出圈
-  const pt = g.world.balls.find((b) => b.id === 'player_taw');
-  pt.x = RING.cx - 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 玩家母弹在圈内（但无资格）
-  g._prevOppInRing = true; // 射击前 AI 母弹在圈内（被撞出）
+  pt.x = RING.cx - 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 玩家母珠圈内
+  at.x = RING.cx + RING.r + 40; at.y = RING.cy; at.vx = 0; at.vy = 0; // AI 母珠出圈
+  // 所有彩珠都在圈内（没撞出）
+  for (const m of g.world.balls.filter((b) => b.id.startsWith('m'))) {
+    m.x = RING.cx + (Math.random() - 0.5) * 100;
+    m.y = RING.cy + (Math.random() - 0.5) * 100;
+    m.vx = 0; m.vy = 0; m.captured = false; m.owner = null;
+  }
   g.state = VsState.PLAYER_ROLLING;
   vsUpdate(g, 1);
-  // 玩家无资格 → 不算吃下：AI 吐珠但没淘汰
-  assert.strictEqual(g.scores.ai, 0, 'AI 应吐出战利品');
-  assert.ok(g.state !== VsState.GAME_OVER, '无资格撞母弹不能结束游戏');
-  assert.ok(at.captured !== true, 'AI 母弹不应被吃下（无资格）');
-});
-
-test('新规则：有资格撞出对方母弹 → 吃下淘汰 + 赢走全部', () => {
-  const g = createVsGame();
-  // AI 赢 2 颗，玩家有资格
-  const ms = g.world.balls.filter((b) => b.id.startsWith('m'));
-  ms[0].owner = 'ai'; ms[0].captured = true; ms[0].outOfRing = true;
-  ms[1].owner = 'ai'; ms[1].captured = true; ms[1].outOfRing = true;
-  ms[0].x = RING.cx + RING.r + 20; ms[0].y = RING.cy;
-  ms[1].x = RING.cx + RING.r + 30; ms[1].y = RING.cy;
-  g.scores.ai = 2;
-  g.eligibility.ai = true;
-  g.eligibility.player = true; // 玩家已有资格
-  g.inRing = 6;
-  // 玩家（有资格）撞出 AI 母弹
-  const at = g.world.balls.find((b) => b.id === 'ai_taw');
-  at.x = RING.cx + RING.r + 30; at.y = RING.cy; at.vx = 0; at.vy = 0; // AI 母弹出圈
-  const pt = g.world.balls.find((b) => b.id === 'player_taw');
-  pt.x = RING.cx - 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0; // 玩家母弹在圈内（但有资格）
-  g._prevOppInRing = true; // 射击前 AI 母弹在圈内（被撞出）
-  g.state = VsState.PLAYER_ROLLING;
-  vsUpdate(g, 1);
-  // 吃下：玩家赢走 AI 的 2 颗，游戏结束，玩家胜
-  assert.strictEqual(g.scores.player, 2, '玩家应赢走 AI 的全部战利品');
-  assert.strictEqual(g.state, VsState.GAME_OVER, '吃下母弹应结束游戏');
-  assert.strictEqual(g.winner, 'player', '吃下母弹者获胜');
-  assert.ok(at.captured === true, 'AI 母弹应被吃下');
+  assert.strictEqual(g.scores.player, 0, '撞母珠不得分');
+  assert.strictEqual(g.state, VsState.AI_AIM, '游戏不结束');
+  assert.ok(at.captured !== true, 'AI 母珠不被吃下');
 });

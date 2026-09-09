@@ -62,7 +62,6 @@ export function createVsGame({ aiLevel = 1 } = {}) {
     aiLevel,
     turn: 'player',          // 当前行动方
     scores: { player: 0, ai: 0 },  // 赢得的彩珠数
-    eligibility: { player: false, ai: false },  // 是否已击出彩珠（获得攻击母弹资格，永久）
     inRing: VS_CFG.targetBalls,    // 圈内剩余彩珠
     turnCount: 0,                  // 回合计数（防无限拖局，超上限判胜负）
     lastShot: null,          // 上次射击结果 {knockedOut, tawInRing, hitTaw}
@@ -91,16 +90,9 @@ export function vsFire(game) {
   const shooter = game.turn === 'player' ? 'player_taw' : 'ai_taw';
   if (game.state === VsState.PLAYER_AIM) {
     if (game.power <= 0) return;
-    // 记录射击前对方母弹是否在圈内（用于判定"被撞出"）
-    const oppId = game.turn === 'player' ? 'ai_taw' : 'player_taw';
-    const opp = game.world.balls.find((b) => b.id === oppId);
-    game._prevOppInRing = !!opp && Math.hypot(opp.x - RING.cx, opp.y - RING.cy) < RING.r;
     launch(game.world, shooter, game.aimDir.x, game.aimDir.y, game.power);
     game.state = VsState.PLAYER_ROLLING;
   } else if (game.state === VsState.AI_AIM) {
-    const oppId = game.turn === 'player' ? 'ai_taw' : 'player_taw';
-    const opp = game.world.balls.find((b) => b.id === oppId);
-    game._prevOppInRing = !!opp && Math.hypot(opp.x - RING.cx, opp.y - RING.cy) < RING.r;
     launch(game.world, shooter, game.aimDir.x, game.aimDir.y, game.power);
     game.state = VsState.AI_ROLLING;
   }
@@ -156,12 +148,11 @@ function aiHeuristic(game) {
   return { dirX: Math.cos(ang), dirY: Math.sin(ang), power };
 }
 
-// AI 思考：克隆世界试射，选"能撞出彩珠/打中母弹"的最优角度力度
+// AI 思考：克隆世界试射，选"能撞出彩珠"的最优角度力度
 export function aiThink(game, level = 1) {
   const world = game.world;
   const shooterId = game.turn === 'player' ? 'player_taw' : 'ai_taw';
   const shooter = world.balls.find((b) => b.id === shooterId);
-  const opponent = world.balls.find((b) => b.id === (game.turn === 'player' ? 'ai_taw' : 'player_taw'));
   const marbles = world.balls.filter((b) => b.id.startsWith('m') && !isOutOfRing(b) && !b.captured);
 
   // 候选射击：朝每个彩珠打（保证碰到）+ 朝圈外偏移（把彩珠推出圈），评估试射选最优
@@ -181,25 +172,13 @@ export function aiThink(game, level = 1) {
       }
     }
   }
-  // 如果对方母弹在圈内 + 我方已击出彩珠（有资格）+ 对方有战利品，才加入"攻击母弹"候选
-  const oppDistFromRing = Math.hypot(opponent.x - RING.cx, opponent.y - RING.cy);
-  const oppInRing = oppDistFromRing < RING.r;
-  const oppScore = game.scores[game.turn === 'player' ? 'ai' : 'player'];
-  const aiEligible = !!game.eligibility[game.turn];  // AI 必须已击出彩珠才有资格攻击母弹
-  if (oppInRing && oppScore > 0 && aiEligible) {
-    const baseAng = Math.atan2(opponent.y - shooter.y, opponent.x - shooter.x);
-    const dist = Math.hypot(opponent.x - shooter.x, opponent.y - shooter.y);
-    for (const angOff of [-0.08, 0, 0.08]) {
-      for (const pow of [0.8, 0.9, 1.0]) {
-        shots.push({ dirX: Math.cos(baseAng + angOff), dirY: Math.sin(baseAng + angOff), power: pow, marble: null, dist, attackTaw: true });
-      }
-    }
-  }
+  // 不攻击对方母珠（v2.0：母珠只是工具）
+  // 只生成"撞彩珠"候选
 
   // 逐个试射，评估结果
   let best = null;
   for (const s of shots) {
-    const eval_ = evaluateShot(game, s, oppInRing);
+    const eval_ = evaluateShot(game, s);
     if (!best || eval_.score > best.score) {
       best = { ...s, score: eval_.score, details: eval_ };
     }
@@ -218,8 +197,8 @@ export function aiThink(game, level = 1) {
 }
 
 // 试射评估：克隆世界 → 发射 → 跑物理到静止 → 检查最终结果
-// 返回 {score, knockedOut, tawInRing, hitOpponent}
-export function evaluateShot(game, shot, oppInRing) {
+// 返回 {score, knockedOut, tawInRing}
+export function evaluateShot(game, shot) {
   const clone = structuredClone(game.world);
   const shooterId = game.turn === 'player' ? 'player_taw' : 'ai_taw';
   launch(clone, shooterId, shot.dirX, shot.dirY, shot.power);
@@ -237,26 +216,19 @@ export function evaluateShot(game, shot, oppInRing) {
     }
   }
   const shooter = clone.balls.find((b) => b.id === shooterId);
-  if (!shooter) return { score: 0, knockedOut: 0, tawInRing: false, hitOpponent: false };
+  if (!shooter) return { score: 0, knockedOut: 0, tawInRing: false };
   // 最终位置判定（与 resolveShot 相同逻辑）
   let knockedOut = 0;
   for (const m of clone.balls.filter((b) => b.id.startsWith('m'))) {
     if (isOutOfRing(m)) knockedOut++;
   }
   const tawInRing = Math.hypot(shooter.x - RING.cx, shooter.y - RING.cy) < RING.r;
-  const oppId = game.turn === 'player' ? 'ai_taw' : 'player_taw';
-  const opp = clone.balls.find((b) => b.id === oppId);
-  const hitOpponent = !!(opp && isOutOfRing(opp));
-  // 评分（新规则）：撞出彩珠越多越好；攻击母弹 = 吃下对方（赢走战利品）；
-  // 母弹停圈内 = 惩罚（吐珠）→ 减分，AI 会优先"撞完出圈"
+  // 评分（v2.0"打倒赢珠"）：撞出彩珠越多越好；
+  // 撞出 + 停圈内 = 连打（+3 奖励）；停圈内但没撞出 = missed（无价值）
   let score = knockedOut * 10;
-  if (tawInRing) score -= 5; // 停圈内 = 危险（会吐珠），AI 避免
-  if (hitOpponent) {
-    const oppScore = game.scores[game.turn === 'player' ? 'ai' : 'player'];
-    score += oppScore * 10;
-  }
-  if (levelHigh(game) && !tawInRing && knockedOut === 0) score -= 5;
-  return { score, knockedOut, tawInRing, hitOpponent };
+  if (knockedOut > 0 && tawInRing) score += 3; // 连打奖励
+  if (levelHigh(game) && knockedOut === 0 && !tawInRing) score -= 5; // 高手避免无用射击
+  return { score, knockedOut, tawInRing };
 }
 
 function levelHigh(game) {
@@ -275,26 +247,25 @@ export function vsUpdate(game, dt = 1) {
 }
 
 // 射击结束：判定结果，切换回合
-// 规则（定稿 marbles-h5-VS-RULES.md）：
-//  1. 撞出彩珠 → 归射手；击出 ≥1 颗 → 获得"资格"（可攻母弹，永久）
-//  2. 母弹停圈内 → 惩罚：吐出全部战利品（放回圈内），丧失继续资格，回合结束
-//  3. 有资格者把对方母弹撞出圈 → 吃下对方母弹（淘汰）+ 赢走对方全部战利品
-//  4. 无资格者撞对方母弹 → 不算吃下；若对方被撞出圈 → 对方吐珠放回圈内，仍可继续
-//  5. 胜负：圈内彩珠清空，或一方母弹被吃下（淘汰）
+// 规则（v2.0 定稿"打倒赢珠"，marbles-h5-VS-RULES.md）：
+//  1. 撞出彩珠（圆心过圈线）→ 归射手（+1 分，飞入袋子）
+//  2. 连打：本轮撞出 ≥1 颗 且 母珠停圈内 → 继续本回合
+//  3. 换人：母珠出圈（惩罚，回合结束）或 没撞出彩珠（母珠停圈内没打中）→ 换人
+//  4. 不攻击对方母珠（母珠只是工具）
+//  5. 胜负：圈内彩珠清空，最多者胜；回合上限 40
 function resolveShot(game) {
   const shooterId = game.turn === 'player' ? 'player_taw' : 'ai_taw';
   const shooter = game.world.balls.find((b) => b.id === shooterId);
   const marbles = game.world.balls.filter((b) => b.id.startsWith('m'));
   const tawInRing = Math.hypot(shooter.x - RING.cx, shooter.y - RING.cy) < RING.r;
   const shooterInRing = tawInRing;
-  const shooterEligible = !!game.eligibility[game.turn];
 
-  // 1. 找出本轮出圈的彩珠（出圈 + 属于当前射手），记录赢走的珠子
+  // 1. 找出本轮出圈的彩珠（出圈 + 未捕获），记录赢走的珠子
   let knockedOut = 0;
   const wonMarbles = [];
   for (const m of marbles) {
     if (isOutOfRing(m) && !m.captured) {
-      // 出圈彩珠：先标记 captured（防止重复计分），再给当前射手
+      // 出圈彩珠：标记 captured（防重复计分），归射手
       m.captured = true;
       m.outOfRing = true;
       m.owner = game.turn; // 记录归属（player/ai）
@@ -302,48 +273,9 @@ function resolveShot(game) {
       wonMarbles.push({ id: m.id, x: m.x, y: m.y }); // 记录位置（供飞入动画）
     }
   }
-  // 击出 ≥1 颗彩珠 → 获得攻击资格（永久）
   if (knockedOut > 0) {
-    game.eligibility[game.turn] = true;
     game.scores[game.turn] += knockedOut;
     game.inRing -= knockedOut;
-  }
-
-  // 3/4. 检查是否撞出对方母弹
-  // 判定：对方母弹"射击前在圈内（或至少不是初始圈外），射击后出圈" = 被撞出
-  const oppId = game.turn === 'player' ? 'ai_taw' : 'player_taw';
-  const opp = game.world.balls.find((b) => b.id === oppId);
-  let hitOpponentTaw = false;
-  let ateOpponent = false;
-  let oppSpitBack = false;
-  const oppPrevInRing = game._prevOppInRing ?? false; // 射击前对方母弹是否在圈内
-  if (opp && !opp.captured && isOutOfRing(opp) && oppPrevInRing) {
-    // 对方母弹本轮从圈内被撞到圈外 → 算"被撞出"
-    hitOpponentTaw = true;
-    if (shooterEligible) {
-      // 有资格 → 吃下对方母弹（淘汰）+ 赢走对方全部战利品
-      ateOpponent = true;
-      const stolen = game.scores[game.turn === 'player' ? 'ai' : 'player'];
-      game.scores[game.turn] += stolen;
-      game.scores[game.turn === 'player' ? 'ai' : 'player'] = 0;
-      opp.captured = true; // 母弹被吃下 → 对方淘汰
-    } else {
-      // 无资格 → 对方被撞出圈，但不算吃下：对方吐珠（放回圈内），仍可继续
-      oppSpitBack = true;
-      oppSpitBackMarble(game, game.turn === 'player' ? 'ai' : 'player');
-    }
-  }
-
-  // 2. 母弹停圈内（且没吃下对方母弹——吃下母弹时射手母弹可能也停圈内，但已是终结局）
-  let penaltyStuck = false;
-  if (shooterInRing && !ateOpponent) {
-    // 母弹停在圈内 → 吐出全部战利品（放回圈内），丧失继续资格
-    // 注：刚击出的本轮彩珠（wonMarbles）已物理出圈，不算"之前累积"，保留
-    const excludeIds = new Set(wonMarbles.map((w) => w.id));
-    spitBackMarbles(game, game.turn, excludeIds);
-    penaltyStuck = true; // 停圈内 = 惩罚性事件
-    // spitBackMarbles 已清空该玩家分数并吐回旧战利品；本轮新赢的保留
-    game.scores[game.turn] = knockedOut;
   }
 
   // 记录本次结果（供 UI 显示）
@@ -352,17 +284,24 @@ function resolveShot(game) {
     knockedOut,
     wonMarbles,
     tawInRing: shooterInRing,
-    hitOpponentTaw,
-    ateOpponent,       // 吃下对方母弹（淘汰）
-    oppSpitBack,       // 无资格撞出对方 → 对方吐珠
-    penaltyStuck,      // 母弹停圈内惩罚
+    // 连打 = 撞出彩珠 且 母珠停圈内
+    combo: knockedOut > 0 && shooterInRing,
+    // 母珠出圈（惩罚，回合结束换人）
+    tawOut: !shooterInRing,
+    // 没撞出（母珠停圈内但没打中，回合结束换人）
+    missed: knockedOut === 0 && shooterInRing,
   };
 
-  // 回合切换：母弹停圈内 = 惩罚结束回合；否则换边
-  // 换边
+  // 2. 连打：撞出 ≥1 颗 且 母珠停圈内 → 继续本回合
+  if (knockedOut > 0 && shooterInRing) {
+    game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
+    return; // 不换边，不重置母珠，从母珠当前位置继续
+  }
+
+  // 3. 换人：母珠出圈（惩罚）或 没撞出（停圈内没打中）
   game.turn = game.turn === 'player' ? 'ai' : 'player';
   game.turnCount++;
-  // 重置母弹：被撞出圈/自己滚出圈的一方（且未被吃下），重新从圈外起始点起手
+  // 重置母珠：出圈的母珠（自己滚出圈）回到圈外起点；没撞出停圈内的母珠留在原地（下回合从落点继续）
   for (const tawId of ['player_taw', 'ai_taw']) {
     const tb = game.world.balls.find((b) => b.id === tawId);
     if (tb && !tb.captured && isOutOfRing(tb)) {
@@ -374,20 +313,12 @@ function resolveShot(game) {
 
   // 胜负判定
   let gameOver = false;
-  if (ateOpponent) {
-    // 吃下对方母弹 → 对方淘汰，直接获胜
-    game.winner = game.turn === 'player' ? 'ai' : 'player'; // 注意：此时 turn 已切换，吃下者是被切换前的人
-    // 修正：吃下者是 shooter（切换前的 game.turn），但上面 turn 已切换
-    // 用 ateBy 记录吃下者
-    game.winner = game.lastShot.shooter;
-    gameOver = true;
-  }
   if (game.inRing <= 0) {
     gameOver = true;
     if (game.scores.player === game.scores.ai) game.winner = 'draw';
     else game.winner = game.scores.player > game.scores.ai ? 'player' : 'ai';
   }
-  // 回合上限：防无限拖局（双方都打不准→吐珠→永远清不空）
+  // 回合上限：防无限拖局
   if (!gameOver && game.turnCount >= 40) {
     gameOver = true;
     if (game.scores.player === game.scores.ai) game.winner = 'draw';
@@ -398,40 +329,6 @@ function resolveShot(game) {
   } else {
     game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
   }
-}
-
-// 把一个玩家的战利品全部放回圈内（惩罚：母弹停圈内 或 无资格撞出对方母弹）
-// excludeIds：本轮新赢的珠子不吐（它们已物理出圈，不算"之前累积"）
-// 返回放回数量
-function spitBackMarbles(game, side, excludeIds = new Set()) {
-  const marbles = game.world.balls.filter((b) => b.id.startsWith('m') && b.owner === side && !excludeIds.has(b.id));
-  let count = 0;
-  for (const m of marbles) {
-    // 放回圈内随机位置（不重叠、不在母弹上）
-    let x, y, ok = false, guard = 0;
-    while (!ok && guard < 100) {
-      guard++;
-      const ang = Math.random() * Math.PI * 2;
-      const rad = Math.random() * RING.r * 0.5;
-      x = RING.cx + Math.cos(ang) * rad;
-      y = RING.cy + Math.sin(ang) * rad;
-      ok = !game.world.balls.some((b) => b.id !== m.id && Math.hypot(b.x - x, b.y - y) < VS_CFG.marbleR * 2.4);
-    }
-    m.x = x; m.y = y;
-    m.vx = 0; m.vy = 0;
-    m.captured = false;
-    m.outOfRing = false;
-    m.owner = null;
-    game.inRing++;
-    count++;
-  }
-  game.scores[side] = 0;
-  return count;
-}
-
-// 无资格者撞出对方母弹 → 对方吐珠放回圈内（但仍可继续）
-function oppSpitBackMarble(game, oppSide) {
-  spitBackMarbles(game, oppSide);
 }
 
 // 玩家发射后的更新流程（渲染层调用）
