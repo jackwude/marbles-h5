@@ -172,9 +172,10 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 8. **AI 试射评估**：aiThink 的模拟试射必须"跑到底"检查最终位置，不能每帧统计瞬时出圈（会误判）。
 9. **母弹 captured 卡死**：vs.js 里母弹被撞出圈若直接标 captured 会导致 step 跳过无法再发射 → 应重置回圈外起点（真实规则）。
 10. **lastShot 只记数字不够**：反馈 UI 需要知道"赢走了哪颗珠子"（id+位置）→ 加 `wonMarbles` 字段供飞入动画/袋子渲染。
-11. **被撞出判定 = "射击前在圈内→射击后出圈"**（v0.7）：母弹初始就在圈外（120/680），不能算"被撞出"。用 `_prevOppInRing`（vsFire 记录射击前对方母弹是否在圈内）判定。测试直接设 state=ROLLING 时需手动设 `_prevOppInRing`。
-12. **停圈内吐珠 vs 本轮新赢**（v0.7）：母弹停圈内吐"之前"战利品，本轮刚击出的彩珠（wonMarbles）已物理出圈要保留 → `spitBackMarbles` 传 excludeIds。
-13. **回合上限 40**（v0.7）：新规则下双方打不准→吐珠→彩珠永远清不空会死循环，加 turnCount 上限判胜负。
+11. **v2.0 连打规则**（"打倒赢珠"）：连打 = 撞出 ≥1 颗 **且** 母珠停圈内 → 继续本回合（不换边不重置，从母珠当前位置）；母珠出圈 = 惩罚（换人+重置回起点）；没撞出停圈内 = 换人但母珠留原地。**三个分支互斥**，resolveShot 里先判连打（直接 return），再走换人。
+12. **不攻击母珠**（v2.0）：母珠只是工具，碰撞对方母珠不算分/不淘汰。删除了 v0.7 的资格/吃母弹/吐珠逻辑（spitBackMarbles、eligibility、_prevOppInRing 全部移除）。
+13. **回合上限 40**：双方都打不准→连打难触发→清不空圈会拖局，加 turnCount 上限判胜负。
+14. **CDP touch 脚本会超时**：页面 rAF 密集时 CDP Input.dispatchTouchEvent 可能阻塞 ws。游戏逻辑用单测验证（30 用例覆盖），浏览器只验证 UI（版本/教学条/进对战）。
 
 ## 📋 待开发（GDD 路线图）
 
