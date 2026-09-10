@@ -44,9 +44,23 @@ export class VsRenderer3D {
 
   // ---- vs.js 逻辑更新（复用现有规则，零改动）----
   _logicUpdate(g, dt) {
-    // 玩家滚动中 → 推进物理
+    // 同步渲染器的 logic 引用（restart/again 后 game 被替换）
+    if (this.renderer && this.renderer.logic !== g) {
+      this.renderer.logic = g;
+    }
+    // 玩家滚动中 → 推进物理（dt 是帧归一化值 /16.67，匹配物理引擎设计）
     if (g.state === 'player_rolling' || g.state === 'ai_rolling') {
       vs.vsUpdate(g, dt);
+    }
+    // AI 回合：思考后发射（只触发一次，与 2D VsRenderer 一致）
+    if (g.state === 'ai_aim' && !this._aiTimer) {
+      this._aiTimer = setTimeout(() => {
+        this._aiTimer = null;
+        if (this.game.state !== 'ai_aim') return;
+        vs.vsAIShot(this.game);
+        if (this.audio) this.audio.play('launch');
+        if (this.callbacks.onStateChange) this.callbacks.onStateChange(this.game);
+      }, 700); // AI "思考"时间
     }
     this._checkShotFeedback(g);
     this._checkGameOver(g);
@@ -61,13 +75,14 @@ export class VsRenderer3D {
     return true;
   }
 
+  // 注意：2D 版拖拽用"屏幕像素"算 dx/dy（不走世界坐标映射），保持手感一致
   _onAimStart(pt) {
     this._aimStart = { x: pt.x, y: pt.y };
   }
 
   _onAim(start, pt) {
     if (!this._aimStart) return;
-    // 反向拖拽瞄准：往目标反方向拖（拉弓式）
+    // 屏幕像素差（与 2D 版一致：clientX - startX）
     const dx = pt.x - this._aimStart.x;
     const dy = pt.y - this._aimStart.y;
     vs.vsSetAim(this.game, dx, dy, 120);
@@ -125,17 +140,27 @@ export class GameRenderer3D {
   }
 
   _logicUpdate(g, dt) {
+    // 同步渲染器的 logic 引用（restart 后 game 被替换）
+    if (this.renderer && this.renderer.logic !== g) {
+      this.renderer.logic = g;
+    }
     if (g.state === 'rolling') {
       game.update(g, dt);
-    }
-    // 进洞结算
-    if (g.state === 'captured' && !this._levelCaptured) {
-      this._levelCaptured = true;
-      if (this.callbacks.onCaptured) this.callbacks.onCaptured(g);
-      if (this.audio) this.audio.play('hole');
-    } else if (g.state === 'out' && !this._levelCaptured) {
-      this._levelCaptured = true;
-      if (this.callbacks.onOut) this.callbacks.onOut(g);
+      // 状态切换（与 2D GameRenderer 对齐）
+      if (g.state !== 'rolling') {
+        if (g.state === 'captured') {
+          if (this.audio) this.audio.play('hole');
+          this._levelCaptured = true;
+          if (this.callbacks.onCaptured) this.callbacks.onCaptured(g);
+        } else {
+          game.settle(g);
+          if (g.state === 'out') {
+            if (this.callbacks.onOut) this.callbacks.onOut(g);
+          } else if (this.callbacks.onStateChange) {
+            this.callbacks.onStateChange(g);
+          }
+        }
+      }
     }
   }
 

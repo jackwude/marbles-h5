@@ -51,13 +51,28 @@ export class Renderer3D {
     let entry = this.meshMap.get(ball.id);
     if (!entry) {
       const isTaw = ball.id.includes('taw');
-      // 对战：玩家红 / AI 蓝；闯关：用当前皮肤（rgba 字符串 → 数字色）
       let style;
       if (isTaw) {
+        // 对战：玩家红 / AI 蓝
         style = ball.id.includes('player')
           ? { base: 0xdd3333, highlight: 0xffffff, shadow: 0x000000 }
           : { base: 0x3366cc, highlight: 0xffffff, shadow: 0x000000 };
+      } else if (this.opts.mode === 'vs') {
+        // 对战彩珠：8 种彩色样式（与 2D MARBLE_STYLES 配色一致）
+        const vsColors = [
+          { base: 0xe74c3c, highlight: 0xffa5a5 },  // 红
+          { base: 0xff8800, highlight: 0xffd0a0 },  // 橙
+          { base: 0x2ecc71, highlight: 0xa8f0c8 },  // 绿
+          { base: 0x3498db, highlight: 0xa8d8f0 },  // 蓝
+          { base: 0x9b59b6, highlight: 0xd8b0e8 },  // 紫
+          { base: 0xf1c40f, highlight: 0xffe880 },  // 黄
+          { base: 0x1abc9c, highlight: 0xa8f0e8 },  // 青
+          { base: 0xe84393, highlight: 0xffb0d8 },  // 粉
+        ];
+        const idx = parseInt(ball.id.slice(1), 10) % vsColors.length;
+        style = { base: vsColors[idx].base, highlight: vsColors[idx].highlight, shadow: 0x333333 };
       } else {
+        // 闯关：当前皮肤（rgba 字符串 → 数字色）
         const skin = SKINS[this.opts.skinId] || SKINS.transparent;
         style = {
           base: this._rgbaToHex(skin.base) || 0xffffff,
@@ -98,7 +113,8 @@ export class Renderer3D {
   // ---- 主循环：推进逻辑 → 同步 → 渲染 ----
   _loop(t) {
     requestAnimationFrame(this._loop);
-    const dt = Math.min((t - this._lastTime) / 1000, 0.05); // 秒，上限 50ms
+    // dt 帧归一化（60fps → 1），匹配物理引擎按"帧"设计（与 2D render.js 一致）
+    const dt = Math.min((t - this._lastTime) / 16.67, 2);
     this._lastTime = t;
     // 推进 2D 逻辑（复用现有 game.js / vs.js 的 update）
     if (this.opts.logicUpdate) {
@@ -118,7 +134,7 @@ export class Renderer3D {
         id: w.id,
         start: to3D(w.x, w.y, 0),
         t: 0,
-        dur: 0.5,
+        dur: 30, // 30 帧 ≈ 0.5 秒
       }));
       this.logic.lastShot.wonMarbles = []; // 消费掉，防重复
     }
@@ -152,18 +168,18 @@ export class Renderer3D {
     canvas.addEventListener('pointerdown', (e) => {
       if (this.opts.onPointerDown && !this.opts.onPointerDown()) return; // 返回 false 阻止（如教学条显示中）
       this._dragging = true;
-      this._start = this._screenTo2D(e.clientX, e.clientY);
+      this._start = { x: e.clientX, y: e.clientY }; // 屏幕坐标（与 2D 手感一致）
       if (this.opts.onAimStart) this.opts.onAimStart(this._start);
     });
     canvas.addEventListener('pointermove', (e) => {
       if (!this._dragging) return;
-      const pt = this._screenTo2D(e.clientX, e.clientY);
+      const pt = { x: e.clientX, y: e.clientY };
       if (this.opts.onAim) this.opts.onAim(this._start, pt);
     });
     canvas.addEventListener('pointerup', (e) => {
       if (!this._dragging) return;
       this._dragging = false;
-      const pt = this._screenTo2D(e.clientX, e.clientY);
+      const pt = { x: e.clientX, y: e.clientY };
       if (this.opts.onAimEnd) this.opts.onAimEnd(this._start, pt);
     });
     canvas.addEventListener('pointercancel', () => { this._dragging = false; });
