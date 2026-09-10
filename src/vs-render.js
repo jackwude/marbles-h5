@@ -1,6 +1,6 @@
 // 对战模式渲染层：Canvas 绘制 + 输入 + AI 回合驱动
 // 复用 render.js 的 GameAudio；逻辑全在 vs.js（纯函数）
-import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, START_LINE, VS_CFG } from './vs.js';
+import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, START_LINE, VS_CFG, setVsWorldSize } from './vs.js';
 import { WORLD_W, WORLD_H } from './levels.js';
 import { GameAudio } from './render.js';
 import { getMarbleTexture } from './marble-textures.js';
@@ -46,9 +46,13 @@ export class VsRenderer {
     this.canvas.width = w * dpr;
     this.canvas.height = h * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.scale = Math.min(w / WORLD_W, h / WORLD_H);
-    this.offsetX = (w - WORLD_W * this.scale) / 2;
-    this.offsetY = (h - WORLD_H * this.scale) / 2;
+    // 世界尺寸 = 屏幕尺寸（竖屏/横屏都铺满，无留白）
+    // 但物理弹珠半径固定（11/13px），世界过大弹珠会显得小 → 限制最大世界尺寸
+    // 策略：世界 = 屏幕尺寸，比例自适应；弹珠视觉半径按 scale 补偿（见 _drawMarbles）
+    setVsWorldSize(w, h);
+    this.scale = 1;
+    this.offsetX = 0;
+    this.offsetY = 0;
     this.viewW = w;
     this.viewH = h;
   }

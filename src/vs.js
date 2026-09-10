@@ -17,34 +17,47 @@ export const VsState = {
   GAME_OVER: 'game_over',
 };
 
+// 对战布局：默认基于 800x600 逻辑尺寸，createVsGame 可传 worldW/worldH 覆盖（竖屏自适应）
+let VS_W = WORLD_W;
+let VS_H = WORLD_H;
+
 export const RING = {
-  cx: WORLD_W / 2,          // 圈中心（水平居中）
-  cy: WORLD_H * 0.38,       // 圈中心（偏上，给下方起始线留空间）
-  r: 170,                   // 圈半径
-  // 出圈判定：圆心距 > r + 珠半径 视为出圈（完全滚出圈外）
+  get cx() { return VS_W / 2; },          // 圈中心（水平居中）
+  get cy() {
+    // 竖屏（H>W）：圈偏下 44%，均衡利用高度；横屏偏上 38%（给下方起始线留空间）
+    return VS_H > VS_W ? VS_H * 0.44 : VS_H * 0.38;
+  },
+  get r() { return Math.min(VS_W * 0.40, VS_H * 0.38); }, // 圈半径：宽度 40% 或高度 38%（取小，适配横竖屏）
 };
 
 // 起始线位置（下方）
 export const START_LINE = {
-  y: WORLD_H - 90,          // 起始线 y（下方）
+  get y() { return VS_H - 90; },
 };
 
 // 母珠初始位置（起始线上）
 const TAW_START = {
-  player: { x: WORLD_W * 0.3, y: START_LINE.y },   // 玩家左下
-  ai: { x: WORLD_W * 0.7, y: START_LINE.y },       // AI 右下
+  get player() { return { x: VS_W * 0.3, y: START_LINE.y }; },
+  get ai() { return { x: VS_W * 0.7, y: START_LINE.y }; },
 };
+
+// 设置对战世界尺寸（竖屏自适应：由渲染器按屏幕比例传入）
+export function setVsWorldSize(w, h) {
+  VS_W = w;
+  VS_H = h;
+}
 
 export const VS_CFG = {
   targetBalls: 8,           // 圈内彩珠数量
-  marbleR: 11,              // 彩珠半径
-  tawR: 13,                 // 母弹半径（略大）
+  get marbleR() { return Math.max(5, RING.r * 0.065); },  // 彩珠半径 = 圈半径 6.5%（800/170 基准）
+  get tawR() { return Math.max(6, RING.r * 0.076); },     // 母弹半径（略大）
   aiThinkMs: 700,           // AI "思考"时间（模拟人停顿）
   minWinBalls: 1,           // 至少赢 1 颗才算胜
 };
 
-// 创建对战局
-export function createVsGame({ aiLevel = 1 } = {}) {
+// 创建对战局（worldW/worldH 可覆盖世界尺寸，竖屏自适应用）
+export function createVsGame({ aiLevel = 1, worldW, worldH } = {}) {
+  if (worldW && worldH) setVsWorldSize(worldW, worldH);
   const balls = [];
   // 玩家母珠（红）——起始线上（左下）
   balls.push(makeBall('player_taw', TAW_START.player.x, TAW_START.player.y, VS_CFG.tawR));
@@ -66,7 +79,7 @@ export function createVsGame({ aiLevel = 1 } = {}) {
     balls.push(makeBall(`m${placed}`, x, y, VS_CFG.marbleR));
     placed++;
   }
-  const world = createWorld({ w: WORLD_W, h: WORLD_H, balls, holes: [], obstacles: [], walls: true });
+  const world = createWorld({ w: VS_W, h: VS_H, balls, holes: [], obstacles: [], walls: true });
   return {
     state: VsState.PLAYER_AIM,
     world,
@@ -330,8 +343,8 @@ function resolveShot(game) {
     game.turnCount++;
     const tb = game.world.balls.find((b) => b.id === shooterId);
     if (tb) {
-      tb.x = shooterId === 'player_taw' ? WORLD_W * 0.3 : WORLD_W * 0.7;
-      tb.y = WORLD_H - 80; // 起始线在下
+      tb.x = shooterId === 'player_taw' ? VS_W * 0.3 : VS_W * 0.7;
+      tb.y = VS_H - 80; // 起始线在下
       tb.vx = 0; tb.vy = 0;
     }
   } else if (knockedOut > 0) {
@@ -408,7 +421,8 @@ export function vsAIShot(game) {
 
 // 重开
 export function vsRestart(game, { aiLevel } = {}) {
-  const g = createVsGame({ aiLevel: aiLevel ?? game.aiLevel });
+  // 保留原世界尺寸（竖屏自适应：restart 不退回 800x600）
+  const g = createVsGame({ aiLevel: aiLevel ?? game.aiLevel, worldW: game.world.w, worldH: game.world.h });
   Object.assign(game, g);
   return game;
 }

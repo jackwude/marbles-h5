@@ -209,31 +209,37 @@ let vsAiLevel = 1;
 
 function startVs(aiLevel = 1) {
   vsAiLevel = aiLevel;
-  vsGame = createVsGame({ aiLevel });
   if (!audio) audio = new GameAudio();
   audio.startAmbience();
   preloadMarbleTextures(); // 预热弹珠 PNG 贴图（不阻塞，加载完自动生效）
-  if (vsRenderer) { vsRenderer.game = vsGame; vsRenderer._gameOverNotified = false; }
-  else {
-    if (USE_3D) {
-      vsRenderer = new VsRenderer3D($('vs-canvas'), vsGame, {
-        onStateChange: (g) => updateVsHUD(g),
-        onGameOver: (g) => onVsGameOver(g),
-      }, audio);
-    } else {
-      vsRenderer = new VsRenderer($('vs-canvas'), vsGame, {
-        onStateChange: (g) => updateVsHUD(g),
-        onGameOver: (g) => onVsGameOver(g),
-      }, audio);
-    }
-  }
-  window.__vsGame = vsGame;
-  window.__vsRenderer = vsRenderer;
-  updateVsHUD(vsGame);
+  // 先显示对战屏，再取画布实际尺寸（hidden 时 clientWidth=0，会回退 window.innerWidth 导致世界比画布高）
   $('vs-overlay').classList.add('hidden');
   show('vs');
-  // 首次进入显示规则教学条（v0.7）：点击或 6 秒后自动关闭
-  showVsTutorial();
+  // 竖屏自适应：用画布实际尺寸创建对战世界（铺满屏幕，圈最大化）
+  requestAnimationFrame(() => {
+    const canvas = $('vs-canvas');
+    const cw = canvas.clientWidth || window.innerWidth;
+    const ch = canvas.clientHeight || window.innerHeight;
+    vsGame = createVsGame({ aiLevel, worldW: cw, worldH: ch });
+    if (vsRenderer) { vsRenderer.game = vsGame; vsRenderer._gameOverNotified = false; }
+    else {
+      if (USE_3D) {
+        vsRenderer = new VsRenderer3D($('vs-canvas'), vsGame, {
+          onStateChange: (g) => updateVsHUD(g),
+          onGameOver: (g) => onVsGameOver(g),
+        }, audio);
+      } else {
+        vsRenderer = new VsRenderer($('vs-canvas'), vsGame, {
+          onStateChange: (g) => updateVsHUD(g),
+          onGameOver: (g) => onVsGameOver(g),
+        }, audio);
+      }
+    }
+    window.__vsGame = vsGame;
+    window.__vsRenderer = vsRenderer;
+    updateVsHUD(vsGame);
+    showVsTutorial();
+  });
 }
 
 // 显示对战规则教学条
