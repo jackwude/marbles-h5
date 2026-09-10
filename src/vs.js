@@ -367,8 +367,9 @@ function resolveShot(game) {
       tawOutNoHit: false,
       canceled: false,
     };
-    game.state = game.turn === 'player' ? VsState.PLAYER_AIM : VsState.AI_AIM;
-    return; // 不换边，从母珠出圈处继续
+    // ⚠️ 不 return！让流程落到下方胜负判定（否则最后彩珠清空后游戏不结束）
+    // 连打不换边，state 在下方统一设置（PLAYER_AIM/AI_AIM，或 GAME_OVER）
+    game.turnCount++; // 连打也算一回合（防无限连打拖局）
   } else {
     // ===== 母珠出圈 + 没击出 = 换人，母珠留原地 =====
     game.lastShot = {

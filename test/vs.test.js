@@ -190,3 +190,55 @@ test('v2.1：不攻击对方母珠（母珠互撞不算分）', () => {
   assert.ok(at.captured !== true, 'AI 母珠不被吃下');
   assert.strictEqual(g.inRing, 8, '圈内彩珠不变');
 });
+
+// ===== v3.1.3 回归测试：最后彩珠清空应立即结算（用户 bug 报告）=====
+
+test('v3.1.3：连打清空最后彩珠 → 立即 GAME_OVER（不等母弹再动）', () => {
+  const g = createVsGame();
+  // 玩家母珠出圈（连打条件）
+  const pt = g.world.balls.find((b) => b.id === 'player_taw');
+  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0;
+  // 只剩 1 颗彩珠，且它已出圈（本轮击出 = 清空）
+  const marbles = g.world.balls.filter((b) => b.id.startsWith('m'));
+  for (let i = 0; i < marbles.length; i++) {
+    const m = marbles[i];
+    if (i === 0) {
+      m.x = RING.cx + RING.r + 30; m.y = RING.cy; // 出圈（将被击出）
+      m.captured = false; m.owner = null;
+    } else {
+      m.captured = true; m.outOfRing = true; m.owner = 'ai'; // 其余已被 AI 赢走
+    }
+  }
+  g.inRing = 1; // 圈内只剩 1 颗
+  g.scores = { player: 3, ai: 4 };
+  g.state = VsState.PLAYER_ROLLING;
+  vsUpdate(g, 1);
+  // 修复前：连打 return 提前退出 → state 仍是 PLAYER_AIM，游戏不结束
+  // 修复后：应落入胜负判定 → GAME_OVER
+  assert.strictEqual(g.inRing, 0, '圈内清空');
+  assert.strictEqual(g.state, VsState.GAME_OVER, '立即结束（不等母弹再动）');
+  assert.ok(g.winner === 'ai' || g.winner === 'player' || g.winner === 'draw', '有胜者');
+});
+
+test('v3.1.3：连打清空彩珠且玩家反超 → 胜者是玩家', () => {
+  const g = createVsGame();
+  const pt = g.world.balls.find((b) => b.id === 'player_taw');
+  pt.x = RING.cx + RING.r + 50; pt.y = RING.cy; pt.vx = 0; pt.vy = 0;
+  const marbles = g.world.balls.filter((b) => b.id.startsWith('m'));
+  for (let i = 0; i < marbles.length; i++) {
+    const m = marbles[i];
+    if (i === 0) {
+      m.x = RING.cx + RING.r + 30; m.y = RING.cy;
+      m.captured = false; m.owner = null;
+    } else {
+      m.captured = true; m.outOfRing = true; m.owner = 'ai';
+    }
+  }
+  g.inRing = 1;
+  g.scores = { player: 4, ai: 3 }; // 玩家已领先
+  g.state = VsState.PLAYER_ROLLING;
+  vsUpdate(g, 1);
+  assert.strictEqual(g.state, VsState.GAME_OVER, '立即结束');
+  assert.strictEqual(g.winner, 'player', '玩家胜');
+  assert.strictEqual(g.scores.player, 5, '击出的最后 1 颗归玩家');
+});
