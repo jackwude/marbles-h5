@@ -1,7 +1,7 @@
 # 🎯 打弹珠（Marbles H5）— 项目进度
 
 > **最后更新**：2026-09-09
-> **当前版本**：v2.1.1（右下角徽章显示）
+> **当前版本**：v3.0.0（右下角徽章显示）
 > **线上地址**：https://marbles-bws.pages.dev/
 > **CF Pages 项目**：`marbles`（Production: main 分支，独立项目，不碰现有线上）
 
@@ -129,22 +129,44 @@
 - [x] 反馈文案：「⚠️ 母珠停在圈内！彩珠归还，回起始线」；教学条第 3 条更新
 - [x] 版本 v2.1.1 + 单测 30 全绿（停圈内作废专项断言：score 0 / inRing 8 / captured false / owner null）
 
+### v3.0.0 — Three.js 3D 升级（斜 45° 视角 · 2026-09-09）
+- [x] **架构**：逻辑与渲染彻底分离——2D 物理/规则（physics/vs/game）原样保留，Three.js 只做渲染层
+- [x] **场景**：斜 45° 透视相机 + 三光源（主光/补光/环境光）+ 泥地地面 + 阴影
+- [x] **弹珠**：玻璃质感球（clearcoat 高光）+ 内部花纹球 + 滚动旋转（运动方向驱动）
+- [x] **竞技场**：圈（白色虚线 Line）+ 起始线（下方 Box）+ 边界墙 + 圈内淡色
+- [x] **桥接**：`scene3d.to3D/to2D` 坐标映射（2D y → 3D z，往返一致，单测覆盖）
+- [x] **输入**：屏幕射线 → 地面交点 → 2D 逻辑（斜视角瞄准映射，CDP 实测屏幕中心→(400,300)）
+- [x] **反馈**：出圈彩珠抛物线"飞入袋子"动画（3D）+ 复用 HTML 横幅
+- [x] **降级开关**：WebGL 检测 + `?2d=1` 强制 2D；低端机自动回退 Canvas 2D
+- [x] **适配层**：`VsRenderer3D`/`GameRenderer3D` 与 2D 渲染器同接口，main.js 无痛切换
+- [x] 版本 v3.0.0 + 单测 37 全绿（+5 桥接 +2 适配回调）
+- [x] CDP 实测：v3.0.0 徽章 / 3D 场景截图（圈/起始线/立体弹珠）/ 屏幕→2D 映射准确
+- [ ] 真机性能验证（iPhone/Android 帧率）——待用户真机试玩反馈
+
 ## 🔬 技术架构
 
 ```
 marbles-h5/
 ├── index.html          # 骨架 + 版本徽章
 ├── style.css           # 样式（移动端优先）
+├── vendor/
+│   └── three/          # Three.js r160（本地，零构建零依赖）
 ├── src/
 │   ├── physics.js      # 物理引擎（纯函数，可单测）核心
 │   ├── game.js         # 状态机（aim→rolling→settled/captured/out）
 │   ├── levels.js       # 6 关 JSON 数据（关卡即数据，加关不改代码）
 │   ├── skins.js        # 皮肤定义（4 款）
 │   ├── vs.js           # 对战模式核心逻辑（圈内规则 + AI 决策，纯函数可单测）
-│   ├── vs-render.js    # 对战渲染（弹珠多样式 + 反馈横幅 + 飞入动画）
-│   ├── render.js       # Canvas 绘制 + 输入 + 音效（GameAudio）
-│   └── main.js         # UI 流程 + 存档 + 页面切换
-├── test/               # node:test 单测（30 个，全绿：闯关 18 + 对战 12）
+│   ├── vs-render.js    # 对战渲染 2D（弹珠多样式 + 反馈横幅 + 飞入动画）
+│   ├── render.js       # Canvas 2D 渲染 + 输入 + 音效（GameAudio）
+│   ├── three/          # 3D 渲染层（Three.js）
+│   │   ├── scene3d.js      # 场景/相机/灯光/地面 + to3D/to2D 坐标映射
+│   │   ├── marbles3d.js    # 玻璃弹珠模型 + 滚动旋转
+│   │   ├── arena3d.js      # 圈/起始线/边界墙 3D
+│   │   ├── renderer3d.js   # 3D 渲染器（逻辑桥接 + 输入 + 飞入动画）
+│   │   └── adapters3d.js   # VsRenderer3D/GameRenderer3D 适配层 + 2D 降级开关
+│   └── main.js         # UI 流程 + 存档 + 页面切换（3D/2D 自动选择）
+├── test/               # node:test 单测（37 个，全绿：闯关 18 + 对战 12 + 3D 7）
 └── PROGRESS.md         # 本文件
 ```
 
@@ -158,7 +180,7 @@ marbles-h5/
 
 ```bash
 cd ~/.hermes/workspace/projects/marbles-h5
-npm test          # 30/30 单测全绿
+npm test          # 37/37 单测全绿
 python3 -m http.server 8099   # 本地预览
 ```
 
@@ -193,7 +215,12 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 12. **布局坐标**（v2.1）：起始线 `START_LINE.y = WORLD_H - 90`（下方），圈 `RING.cy = WORLD_H * 0.38`（偏上）。母珠初始/惩罚重置位置 = 起始线左右（玩家 `WORLD_W*0.3` / AI `WORLD_W*0.7`）。
 13. **不攻击母珠**：母珠只是工具，碰撞对方母珠不算分/不淘汰。已删除 v0.7 的资格/吃母弹/吐珠逻辑。
 14. **回合上限 40**：双方都打不准→清不空圈会拖局，加 turnCount 上限判胜负。
-15. **CDP touch 脚本会超时**：页面 rAF 密集时 CDP Input.dispatchTouchEvent 可能阻塞 ws。游戏逻辑用单测验证（30 用例覆盖），浏览器只验证 UI（版本/教学条/布局截图）。
+15. **CDP touch 脚本会超时**：页面 rAF 密集时 CDP Input.dispatchTouchEvent 可能阻塞 ws。游戏逻辑用单测验证（37 用例覆盖），浏览器只验证 UI（版本/教学条/布局截图）。
+16. **3D 渲染器只读逻辑**：每帧从 2D 逻辑**单向拉取**位置 → 同步到 3D 网格，3D 永不写回逻辑（防不同步 bug）。动画中的珠子跳过 `_sync`（由 `_updateFlyAnim` 控制）。
+17. **`_flyQueue` 消费 `lastShot.wonMarbles`**：飞入动画初始化后立即置空 `wonMarbles`，防重复触发。但 2D 的 `vs-render.js` 也读 `wonMarbles`——**两者互斥**（3D/2D 不同时实例化，OK）。
+18. **3D 降级**：`shouldUse3D()` 检测 WebGL + `?2d=1` 强制 2D。低端机 WebGL 不可用自动回退 Canvas 2D，游戏永远能玩。
+19. **skin 颜色 rgba→hex**：skins.js 的颜色是 `rgba()` 字符串，Three.js 需要 `0x` 数字 → `_rgbaToHex` 正则解析。
+20. **three.module.js 在 Node 不能 import**（依赖 window/canvas）：Node 单测只测 `to3D/to2D` 纯函数 + 适配器回调逻辑，不 new WebGLRenderer。
 
 ## 📋 待开发（GDD 路线图）
 
@@ -230,6 +257,13 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 **用户反馈**：布局 ✓ 规则 ✓ 手感待真机体验
 
 **下次接续**：真机试玩反馈 → 手感调优；待办表 v1.1.1 难度选择 UI 等
+
+**3D 升级（Three.js）**：
+- 用户问"three.js 是啥" → 规划完整 3D 升级方案（逻辑/渲染分离） → 用户确认"都按你的建议来"
+- v3.0.0：Three.js 斜 45° 视角，2D 物理/规则原样保留，渲染层全换
+- 已上线：https://marbles-bws.pages.dev/（v3.0.0）
+- **待真机验证**：iPhone/Android 帧率 + 触控瞄准手感（CDP 无法模拟 touch，需真机）
+- 2D 降级：WebGL 不可用 / `?2d=1` 自动回退 Canvas 2D
 
 ## 📁 关联文档
 
