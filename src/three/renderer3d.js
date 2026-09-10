@@ -86,6 +86,8 @@ export class Renderer3D {
     const balls = this.logic.world.balls;
     for (const b of balls) {
       const { group } = this._getMesh(b);
+      // 动画中的珠子跳过同步（由 _updateFlyAnim 控制位置）
+      if (this._flyQueue && this._flyQueue.some((f) => f.id === b.id)) continue;
       const p = to3D(b.x, b.y, 0);
       group.position.set(p.x, p.y, p.z);
       // 滚动旋转
@@ -103,7 +105,43 @@ export class Renderer3D {
       this.opts.logicUpdate(this.logic, dt);
     }
     this._sync();
+    this._updateFlyAnim(dt);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // ---- 出圈彩珠"飞入袋子"3D 动画 ----
+  // 监听 lastShot.wonMarbles：赢走的彩珠沿抛物线飞向屏幕上方（袋子区域）
+  _updateFlyAnim(dt) {
+    // 初始化动画队列（从 lastShot 读取一次）
+    if (!this._flyQueue && this.opts.mode === 'vs' && this.logic.lastShot && this.logic.lastShot.wonMarbles && this.logic.lastShot.wonMarbles.length) {
+      this._flyQueue = this.logic.lastShot.wonMarbles.map((w) => ({
+        id: w.id,
+        start: to3D(w.x, w.y, 0),
+        t: 0,
+        dur: 0.5,
+      }));
+      this.logic.lastShot.wonMarbles = []; // 消费掉，防重复
+    }
+    if (!this._flyQueue) return;
+    // 推进动画
+    const done = [];
+    for (const f of this._flyQueue) {
+      f.t += dt;
+      const k = Math.min(f.t / f.dur, 1);
+      const entry = this.meshMap.get(f.id);
+      if (entry) {
+        // 抛物线：起点 → 终点（圈上方屏幕中心），高度隆起
+        const end = to3D(this.logic.world ? 400 : 400, -50, 0); // 世界中心偏上
+        const x = f.start.x + (end.x - f.start.x) * k;
+        const z = f.start.z + (end.z - f.start.z) * k;
+        const y = Math.sin(k * Math.PI) * 60; // 抛物线拱起
+        entry.group.position.set(x, y, z);
+        entry.group.scale.setScalar(1 - k * 0.6); // 缩小飞远
+      }
+      if (k >= 1) done.push(f);
+    }
+    this._flyQueue = this._flyQueue.filter((f) => !done.includes(f));
+    if (this._flyQueue.length === 0) this._flyQueue = null;
   }
 
   // ---- 输入：斜视角拖拽瞄准 ----
