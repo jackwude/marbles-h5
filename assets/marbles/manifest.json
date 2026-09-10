@@ -1,0 +1,58 @@
+[
+  {
+    "input": "bicolor.png",
+    "output": "marble_000.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "bicolor"
+  },
+  {
+    "input": "cateye.png",
+    "output": "marble_001.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "cateye"
+  },
+  {
+    "input": "crystal.png",
+    "output": "marble_002.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "crystal"
+  },
+  {
+    "input": "neon.png",
+    "output": "marble_003.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "neon"
+  },
+  {
+    "input": "porcelain.png",
+    "output": "marble_004.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "porcelain"
+  },
+  {
+    "input": "rainbow.png",
+    "output": "marble_005.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "rainbow"
+  },
+  {
+    "input": "starburst.png",
+    "output": "marble_006.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "starburst"
+  },
+  {
+    "input": "stripe.png",
+    "output": "marble_007.png",
+    "size": 256,
+    "with_shadow": true,
+    "style": "stripe"
+  }
+]

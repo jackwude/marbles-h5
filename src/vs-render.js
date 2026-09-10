@@ -3,6 +3,7 @@
 import { VsState, vsSetAim, vsFire, vsUpdate, vsAIShot, RING, START_LINE, VS_CFG } from './vs.js';
 import { WORLD_W, WORLD_H } from './levels.js';
 import { GameAudio } from './render.js';
+import { getMarbleTexture } from './marble-textures.js';
 
 // 彩珠样式（8 种经典玻璃弹珠，程序化渲染）
 const MARBLE_STYLES = [
@@ -318,9 +319,28 @@ export class VsRenderer {
       ctx.arc(m.x + 2, m.y + 3, m.r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fill();
-      this._drawMarbleStyle(style, m.x, m.y, m.r);
+      // 优先用 PNG 贴图（AI 生成玻璃质感），无贴图回退程序化绘制
+      const tex = getMarbleTexture(i);
+      if (tex) {
+        this._drawMarbleTexture(tex, m.x, m.y, m.r);
+      } else {
+        this._drawMarbleStyle(style, m.x, m.y, m.r);
+      }
       ctx.restore();
     });
+  }
+
+  // 用 PNG 贴图绘制一颗弹珠（圆形裁剪 + 保留公共玻璃层）
+  _drawMarbleTexture(tex, x, y, r) {
+    const { ctx } = this;
+    ctx.save();
+    // 圆形裁剪
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.clip();
+    // 画贴图（覆盖整个圆）
+    ctx.drawImage(tex, x - r, y - r, r * 2, r * 2);
+    ctx.restore();
   }
 
   // 按样式绘制一颗弹珠

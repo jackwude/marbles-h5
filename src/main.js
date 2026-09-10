@@ -6,6 +6,7 @@ import { SKINS, SKIN_ORDER } from './skins.js';
 import { createVsGame, vsRestart, VsState } from './vs.js';
 import { VsRenderer } from './vs-render.js';
 import { GameRenderer3D, VsRenderer3D, shouldUse3D } from './three/adapters3d.js';
+import { preloadMarbleTextures } from './marble-textures.js';
 
 // 3D 渲染开关：默认 2D，仅 `?3d=1` 显式启用（v3.1.0 回归 2D 默认）
 const USE_3D = new URLSearchParams(location.search).get('3d') === '1' && shouldUse3D();
@@ -211,6 +212,7 @@ function startVs(aiLevel = 1) {
   vsGame = createVsGame({ aiLevel });
   if (!audio) audio = new GameAudio();
   audio.startAmbience();
+  preloadMarbleTextures(); // 预热弹珠 PNG 贴图（不阻塞，加载完自动生效）
   if (vsRenderer) { vsRenderer.game = vsGame; vsRenderer._gameOverNotified = false; }
   else {
     if (USE_3D) {
