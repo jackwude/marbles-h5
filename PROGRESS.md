@@ -1,7 +1,7 @@
 # 🎯 打弹珠（Marbles H5）— 项目进度
 
 > **最后更新**：2026-09-09
-> **当前版本**：v3.1.0（右下角徽章显示）
+> **当前版本**：v3.1.1（右下角徽章显示）
 > **线上地址**：https://marbles-bws.pages.dev/
 > **CF Pages 项目**：`marbles`（Production: main 分支，独立项目，不碰现有线上）
 
@@ -170,6 +170,15 @@
   - 8 种样式（cateye/rainbow/stripe/crystal/porcelain/starburst/bicolor/neon）保留
 - [x] 3D 代码保留（`?3d=1` 可切回，后续优化视角用）
 - [x] 版本 v3.1.0 已部署
+
+### v3.1.1 — AI 玻璃弹珠贴图接入（2026-09-10）
+- [x] **资产生成**：火山豆包（Seedream 5.0）生成 8 种样式弹珠图（猫眼/彩虹/条纹/水晶/瓷珠/星光/双色/荧光）
+- [x] **提示词模板**：`isolated on pure white background, no shadow no surface no environment, only the marble`（纯白底、居中、无环境）
+- [x] **资产管线脚本** `scripts/process_marble_assets.py`：rembg 抠图 → 居中裁剪 → LANCZOS 缩放 256px → 代码绘制投影 → manifest.json
+- [x] **贴图加载器** `src/marble-textures.js`：预加载 8 张 PNG，`getMarbleTexture(idx)` 取贴图
+- [x] **渲染接入**：`_drawMarbles` 优先用 PNG 贴图（圆形裁剪），无贴图回退程序化绘制（渐进增强）
+- [x] **踩坑**：浏览器 ES Module 缓存顽固——改版本号到 v3.1.1 强制刷新才生效
+- [x] 版本 v3.1.1 已部署
 
 ## 🔬 技术架构
 
