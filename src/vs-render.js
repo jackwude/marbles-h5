@@ -475,16 +475,75 @@ export class VsRenderer {
         break;
       }
     }
-    // 公共玻璃质感：高光点 + 底部反光
+    // 公共玻璃质感层：球体立体渐变 + 高光点 + 菲涅尔边缘 + 环境反射弧 + 底部反光
     ctx.globalAlpha = 1;
+    // ① 玻璃透光感：中心微亮（玻璃透光），边缘暗（球体曲率）
+    const glassGrad = ctx.createRadialGradient(
+      x, y, r * 0.1,
+      x, y, r
+    );
+    glassGrad.addColorStop(0, 'rgba(255,255,255,0.18)');   // 中心透光
+    glassGrad.addColorStop(0.6, 'rgba(255,255,255,0.05)');  // 过渡
+    glassGrad.addColorStop(0.85, 'rgba(255,255,255,0.0)');  // 渐隐
+    glassGrad.addColorStop(1, 'rgba(20,20,50,0.35)');       // 底部暗边（体积感）
     ctx.beginPath();
-    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = glassGrad;
     ctx.fill();
+
+    // ①b 内部高光球（左上偏移亮斑）—— 玻璃球内部的体积光
+    const innerGrad = ctx.createRadialGradient(
+      x - r * 0.35, y - r * 0.4, r * 0.05,
+      x - r * 0.35, y - r * 0.4, r * 0.6
+    );
+    innerGrad.addColorStop(0, 'rgba(255,255,255,0.35)');
+    innerGrad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.beginPath();
-    ctx.arc(x + r * 0.25, y + r * 0.35, r * 0.12, 0, Math.PI * 2);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = innerGrad;
+    ctx.fill();
+
+    // ② 主高光点（小、亮、实心）—— 玻璃球最亮的镜面反射
+    ctx.beginPath();
+    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.fill();
+
+    // ②b 菲涅尔边缘（球体边缘强白环）—— 玻璃球标志性的边缘透光/反射
+    // 外圈亮环
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.98, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = Math.max(1.2, r * 0.09);
+    ctx.stroke();
+    // 内侧柔光（左上重点）
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.86, Math.PI * 0.75, Math.PI * 1.45);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = Math.max(1.2, r * 0.06);
+    ctx.stroke();
+
+    // ③ 环境反射弧（顶部内侧弧形白线）—— 模拟窗/天空在球面上的反射
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.92, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = Math.max(1, r * 0.09);
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // ④ 底部反光（下方暖色弧）—— 地面光反弹到球底部
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.8, Math.PI * 0.1, Math.PI * 0.45);
+    ctx.strokeStyle = 'rgba(255,240,200,0.3)';
+    ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.stroke();
+
+    // ⑤ 次高光（右下小点，柔和）
+    ctx.beginPath();
+    ctx.arc(x + r * 0.3, y + r * 0.32, r * 0.08, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fill();
+
     ctx.restore();
   }
 
@@ -515,6 +574,35 @@ export class VsRenderer {
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
     ctx.fillStyle = g;
     ctx.fill();
+    // 玻璃立体层：内部透光 + 菲涅尔边缘 + 环境反射弧 + 底部反光
+    // 内部透光（中心微亮，玻璃通透感）
+    const innerGlass = ctx.createRadialGradient(b.x, b.y, b.r * 0.1, b.x, b.y, b.r);
+    innerGlass.addColorStop(0, 'rgba(255,255,255,0.22)');
+    innerGlass.addColorStop(0.6, 'rgba(255,255,255,0.05)');
+    innerGlass.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = innerGlass;
+    ctx.fill();
+    // 菲涅尔边缘（玻璃球标志性边缘透光）
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r * 0.98, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = Math.max(1.5, b.r * 0.09);
+    ctx.stroke();
+    // 环境反射弧
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r * 0.92, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = Math.max(1.5, b.r * 0.09);
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    // 底部反光
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r * 0.8, Math.PI * 0.1, Math.PI * 0.45);
+    ctx.strokeStyle = 'rgba(255,240,200,0.35)';
+    ctx.lineWidth = Math.max(1.5, b.r * 0.12);
+    ctx.stroke();
     // 高光
     ctx.beginPath();
     ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.35, b.r * 0.2, 0, Math.PI * 2);

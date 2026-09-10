@@ -7,8 +7,8 @@ import { createVsGame, vsRestart, VsState } from './vs.js';
 import { VsRenderer } from './vs-render.js';
 import { GameRenderer3D, VsRenderer3D, shouldUse3D } from './three/adapters3d.js';
 
-// 3D 开关（一次检测，全局复用）
-const USE_3D = shouldUse3D();
+// 3D 渲染开关：默认 2D，仅 `?3d=1` 显式启用（v3.1.0 回归 2D 默认）
+const USE_3D = new URLSearchParams(location.search).get('3d') === '1' && shouldUse3D();
 console.log(`[marbles] renderer: ${USE_3D ? '3D (Three.js)' : '2D (Canvas)'}`);
 
 const $ = (id) => document.getElementById(id);
