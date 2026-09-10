@@ -1,7 +1,7 @@
 # 🎯 打弹珠（Marbles H5）— 项目进度
 
 > **最后更新**：2026-09-09
-> **当前版本**：v3.0.0（右下角徽章显示）
+> **当前版本**：v3.0.1（右下角徽章显示）
 > **线上地址**：https://marbles-bws.pages.dev/
 > **CF Pages 项目**：`marbles`（Production: main 分支，独立项目，不碰现有线上）
 
@@ -129,7 +129,7 @@
 - [x] 反馈文案：「⚠️ 母珠停在圈内！彩珠归还，回起始线」；教学条第 3 条更新
 - [x] 版本 v2.1.1 + 单测 30 全绿（停圈内作废专项断言：score 0 / inRing 8 / captured false / owner null）
 
-### v3.0.0 — Three.js 3D 升级（斜 45° 视角 · 2026-09-09）
+### v3.0.1 — Three.js 3D 升级（斜 45° 视角 · 2026-09-09）
 - [x] **架构**：逻辑与渲染彻底分离——2D 物理/规则（physics/vs/game）原样保留，Three.js 只做渲染层
 - [x] **场景**：斜 45° 透视相机 + 三光源（主光/补光/环境光）+ 泥地地面 + 阴影
 - [x] **弹珠**：玻璃质感球（clearcoat 高光）+ 内部花纹球 + 滚动旋转（运动方向驱动）
@@ -139,9 +139,18 @@
 - [x] **反馈**：出圈彩珠抛物线"飞入袋子"动画（3D）+ 复用 HTML 横幅
 - [x] **降级开关**：WebGL 检测 + `?2d=1` 强制 2D；低端机自动回退 Canvas 2D
 - [x] **适配层**：`VsRenderer3D`/`GameRenderer3D` 与 2D 渲染器同接口，main.js 无痛切换
-- [x] 版本 v3.0.0 + 单测 37 全绿（+5 桥接 +2 适配回调）
-- [x] CDP 实测：v3.0.0 徽章 / 3D 场景截图（圈/起始线/立体弹珠）/ 屏幕→2D 映射准确
+- [x] 版本 v3.0.1 + 单测 37 全绿（+5 桥接 +2 适配回调）
+- [x] CDP 实测：v3.0.1 徽章 / 3D 场景截图（圈/起始线/立体弹珠）/ 屏幕→2D 映射准确
 - [ ] 真机性能验证（iPhone/Android 帧率）——待用户真机试玩反馈
+
+### v3.0.1 — 3D 无法游玩修复（2026-09-09）
+- [x] **根因**：3D 适配层漏了 AI 回合驱动（2D `VsRenderer` 有 `AI_AIM → setTimeout → vsAIShot`，3D 没实现）→ AI 永不发射，游戏卡死
+- [x] **dt 单位错误**：3D 用秒 `/1000`，物理引擎按"帧"设计（需 `/16.67`）→ 弹珠几乎不动
+- [x] **输入手感**：3D 误用世界坐标映射算拖拽，改回**屏幕像素**（与 2D 一致）
+- [x] **restart 逻辑同步**：`vsRenderer.game` 更新后，`renderer.logic` 未跟随 → 补 `_logicUpdate` 同步
+- [x] **彩珠配色**：对战彩珠改 8 色（与 2D MARBLE_STYLES 一致），原来误用透明珠
+- [x] 单测 37→42（AI 驱动 + dt 归一化 + 完整回合流转专项）
+- [x] 版本 v3.0.1 已部署
 
 ## 🔬 技术架构
 
@@ -260,8 +269,8 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 
 **3D 升级（Three.js）**：
 - 用户问"three.js 是啥" → 规划完整 3D 升级方案（逻辑/渲染分离） → 用户确认"都按你的建议来"
-- v3.0.0：Three.js 斜 45° 视角，2D 物理/规则原样保留，渲染层全换
-- 已上线：https://marbles-bws.pages.dev/（v3.0.0）
+- v3.0.1：Three.js 斜 45° 视角，2D 物理/规则原样保留，渲染层全换
+- 已上线：https://marbles-bws.pages.dev/（v3.0.1）
 - **待真机验证**：iPhone/Android 帧率 + 触控瞄准手感（CDP 无法模拟 touch，需真机）
 - 2D 降级：WebGL 不可用 / `?2d=1` 自动回退 Canvas 2D
 
