@@ -122,6 +122,9 @@ export class Renderer3D {
     }
     this._sync();
     this._updateFlyAnim(dt);
+    // 瞄准指示器（力度环 + 方向箭头）
+    this._createAimGuide();
+    this._updateAimGuide();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -206,5 +209,117 @@ export class Renderer3D {
     this.meshMap.forEach(({ group }) => this.scene.remove(group));
     this.meshMap.clear();
     this.renderer.dispose();
+  }
+
+  // ---- 瞄准指示器（力度环 + 方向箭头，替代 2D 的 _drawAim）----
+  _createAimGuide() {
+    if (this._aimGuide) return;
+    const group = new THREE.Group();
+
+    // 力度环：圆弧（RingGeometry 扇形，thetaLength 随 power）
+    const ringGeo = new THREE.RingGeometry(0.9, 1.0, 48, 1, 0, Math.PI * 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd27a,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 2; // 略高于地面
+    this.scene.add(ring); // 力度环独立于组（不随箭头旋转，固定起点 +x）
+    this._ring = ring;
+
+    // 方向箭头组：独立旋转（复用开头的 group）
+    this._arrowGroup = group;
+    this.scene.add(group);
+
+    // 方向箭头：用 Mesh（平面三角）代替 Line —— Line 在 3D 里太细看不见
+    const arrowMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    // 箭头杆：细长矩形（长 1，宽 0.35）
+    const shaftGeo = new THREE.PlaneGeometry(1, 0.35);
+    const shaft = new THREE.Mesh(shaftGeo, arrowMat);
+    shaft.position.x = 0.5; // 中心在 0.5（从母珠边缘到箭头头）
+    group.add(shaft);
+    this._arrowShaft = shaft;
+
+    // 箭头头：三角锥（朝 +x）
+    const headGeo = new THREE.ConeGeometry(0.55, 0.9, 8);
+    const head = new THREE.Mesh(headGeo, arrowMat);
+    head.rotation.x = Math.PI / 2; // 平躺朝 +x
+    head.position.x = 1.2;
+    group.add(head);
+    this._arrowHead = head;
+
+    this._aimGuide = group;
+    this.scene.add(group);
+    this._aimGuideHidden = true;
+    return group;
+  }
+
+  _updateAimGuide() {
+    if (!this._aimGuide) return;
+    const g = this.logic;
+    const isAim = this.mode === 'vs'
+      ? g.state === 'player_aim'
+      : g.state === 'aim';
+    const power = g.power || 0;
+
+    // 仅玩家瞄准时显示
+    if (!isAim || power <= 0.02) {
+      if (!this._aimGuideHidden) {
+        this._aimGuide.visible = false;
+        this._ring.visible = false;
+        this._aimGuideHidden = true;
+      }
+      return;
+    }
+
+    // 定位到母珠（对战：player_taw；闯关：player）
+    const tawId = this.mode === 'vs' ? 'player_taw' : 'player';
+    const ball = ((g.world && g.world.balls) || []).find((b) => b.id === tawId);
+    if (!ball) return;
+
+    const p = to3D(ball.x, ball.y, 2);
+    this._aimGuide.position.set(p.x, p.y, p.z);
+    this._ring.position.set(p.x, p.y, p.z);
+
+    // 力度环：圆弧比例 = power（thetaLength = power * 2π，类似 2D 的 arc）
+    // 起点固定 +x（不随箭头旋转），半径固定 = 母珠外 8px
+    const theta = Math.max(0.05, Math.min(1, power)) * Math.PI * 2;
+    const r = ball.r + 8;
+    this._ring.geometry.dispose();
+    this._ring.geometry = new THREE.RingGeometry(r - 4, r, 48, 1, 0, theta);
+    this._ring.scale.set(1, 1, 1);
+    this._ring.visible = true;
+
+    // 方向箭头：沿 aimDir 旋转（箭头组独立旋转，力度环固定）
+    // 2D aimDir 是 (x, y) 单位向量，y 负方向 = 向上（朝圈）
+    // 3D 映射：2D x → 3D x；2D y → 3D z（y 增大 = z 增大 = 靠近相机）
+    //   → 2D "上"（y 减） = 3D -z（远离相机） = 朝圈方向
+    const dir = g.aimDir || { x: 0, y: -1 };
+    const dir3 = { x: dir.x, z: dir.y };
+    // 箭头线几何朝 +x，绕 Y 旋转 ang 后 +x → (cos, 0, -sin)。
+    // 要让 +x 指向 dir3，需 rotation.y = -atan2(dir3.z, dir3.x)
+    const ang = Math.atan2(dir3.z, dir3.x);
+    this._aimGuide.rotation.y = -ang;
+
+    // 箭头长度随 power
+    const len = (ball.r * 2.2) * Math.max(0.1, power); // 约 28 逻辑单位
+    // shaft 几何长 1 宽 0.35：scale.x = len（拉长），scale.y = 10（宽 → 3.5）
+    this._arrowShaft.scale.set(len, 10, 1);
+    // 箭头头：放大 5 倍（半径 2.75，长 4.5），放在杆末端
+    this._arrowHead.scale.setScalar(5);
+    this._arrowHead.position.x = len;
+
+    this._aimGuide.visible = true;
+    this._aimGuideHidden = false;
   }
 }
