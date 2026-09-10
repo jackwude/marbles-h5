@@ -5,6 +5,11 @@ import { GameRenderer, GameAudio } from './render.js';
 import { SKINS, SKIN_ORDER } from './skins.js';
 import { createVsGame, vsRestart, VsState } from './vs.js';
 import { VsRenderer } from './vs-render.js';
+import { GameRenderer3D, VsRenderer3D, shouldUse3D } from './three/adapters3d.js';
+
+// 3D 开关（一次检测，全局复用）
+const USE_3D = shouldUse3D();
+console.log(`[marbles] renderer: ${USE_3D ? '3D (Three.js)' : '2D (Canvas)'}`);
 
 const $ = (id) => document.getElementById(id);
 const SAVE_KEY = 'marbles-h5-save-v1';
@@ -92,14 +97,23 @@ function startLevel(levelId) {
   const game = createGame(levelId);
   if (!audio) audio = new GameAudio();
   audio.startAmbience(); // 环境音（知了/麻雀氛围）
-  if (renderer) { renderer.game = game; renderer._stateChanged(); }
+  if (renderer) { renderer.game = game; if (renderer._stateChanged) renderer._stateChanged(); }
   else {
-    renderer = new GameRenderer($('game-canvas'), game, {
-      skin: () => save.skin,
-      onCaptured: (g) => onCaptured(g),
-      onOut: (g) => onOut(g),
-      onStateChange: (g) => updateHUD(g),
-    }, audio); // 复用同一个 GameAudio，避免双 AudioContext
+    if (USE_3D) {
+      renderer = new GameRenderer3D($('game-canvas'), game, {
+        skin: () => save.skin,
+        onCaptured: (g) => onCaptured(g),
+        onOut: (g) => onOut(g),
+        onStateChange: (g) => updateHUD(g),
+      }, audio);
+    } else {
+      renderer = new GameRenderer($('game-canvas'), game, {
+        skin: () => save.skin,
+        onCaptured: (g) => onCaptured(g),
+        onOut: (g) => onOut(g),
+        onStateChange: (g) => updateHUD(g),
+      }, audio); // 复用同一个 GameAudio，避免双 AudioContext
+    }
   }
   window.__renderer = renderer; // 调试用
   window.__game = game;
@@ -199,10 +213,17 @@ function startVs(aiLevel = 1) {
   audio.startAmbience();
   if (vsRenderer) { vsRenderer.game = vsGame; vsRenderer._gameOverNotified = false; }
   else {
-    vsRenderer = new VsRenderer($('vs-canvas'), vsGame, {
-      onStateChange: (g) => updateVsHUD(g),
-      onGameOver: (g) => onVsGameOver(g),
-    }, audio);
+    if (USE_3D) {
+      vsRenderer = new VsRenderer3D($('vs-canvas'), vsGame, {
+        onStateChange: (g) => updateVsHUD(g),
+        onGameOver: (g) => onVsGameOver(g),
+      }, audio);
+    } else {
+      vsRenderer = new VsRenderer($('vs-canvas'), vsGame, {
+        onStateChange: (g) => updateVsHUD(g),
+        onGameOver: (g) => onVsGameOver(g),
+      }, audio);
+    }
   }
   window.__vsGame = vsGame;
   window.__vsRenderer = vsRenderer;
