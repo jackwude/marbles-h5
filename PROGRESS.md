@@ -213,7 +213,7 @@ marbles-h5/
 │   ├── game.js         # 状态机（aim→rolling→settled/captured/out）
 │   ├── levels.js       # 6 关 JSON 数据（关卡即数据，加关不改代码）
 │   ├── skins.js        # 皮肤定义（4 款）
-│   ├── vs.js           # 对战模式核心逻辑（圈内规则 + AI 决策，纯函数可单测）
+│   ├── vs.js           # 对战模式核心逻辑（圈内规则 + AI 决策 + 动态世界尺寸，纯函数可单测）
 │   ├── vs-render.js    # 对战渲染 2D（弹珠多样式 + 反馈横幅 + 飞入动画）
 │   ├── render.js       # Canvas 2D 渲染 + 输入 + 音效（GameAudio）
 │   ├── marble-textures.js # AI 弹珠 PNG 贴图加载器（预加载 + 回退）— v3.1.1
@@ -228,7 +228,7 @@ marbles-h5/
 │   └── marbles/        # AI 生成弹珠贴图（8 张透明 PNG 256px + manifest.json）— v3.1.1
 ├── scripts/
 │   └── process_marble_assets.py # 弹珠资产生成管线：抠图→裁剪→缩放→投影 — v3.1.1
-├── test/               # node:test 单测（42 个，全绿：闯关 18 + 对战 12 + 3D 12）
+├── test/               # node:test 单测（44 个，全绿：闯关 18 + 对战 14 + 3D 12）
 └── PROGRESS.md         # 本文件
 ```
 
@@ -243,7 +243,7 @@ marbles-h5/
 
 ```bash
 cd ~/.hermes/workspace/projects/marbles-h5
-npm test          # 42/42 单测全绿
+npm test          # 44/44 单测全绿
 python3 -m http.server 8099   # 本地预览
 ```
 
@@ -278,12 +278,14 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 12. **布局坐标**（v2.1）：起始线 `START_LINE.y = WORLD_H - 90`（下方），圈 `RING.cy = WORLD_H * 0.38`（偏上）。母珠初始/惩罚重置位置 = 起始线左右（玩家 `WORLD_W*0.3` / AI `WORLD_W*0.7`）。
 13. **不攻击母珠**：母珠只是工具，碰撞对方母珠不算分/不淘汰。已删除 v0.7 的资格/吃母弹/吐珠逻辑。
 14. **回合上限 40**：双方都打不准→清不空圈会拖局，加 turnCount 上限判胜负。
-15. **CDP touch 脚本会超时**：页面 rAF 密集时 CDP Input.dispatchTouchEvent 可能阻塞 ws。游戏逻辑用单测验证（37 用例覆盖），浏览器只验证 UI（版本/教学条/布局截图）。
+15. **CDP touch 脚本会超时**：页面 rAF 密集时 CDP Input.dispatchTouchEvent 可能阻塞 ws。游戏逻辑用单测验证（44 用例覆盖），浏览器只验证 UI（版本/教学条/布局截图）。
 16. **3D 渲染器只读逻辑**：每帧从 2D 逻辑**单向拉取**位置 → 同步到 3D 网格，3D 永不写回逻辑（防不同步 bug）。动画中的珠子跳过 `_sync`（由 `_updateFlyAnim` 控制）。
 17. **`_flyQueue` 消费 `lastShot.wonMarbles`**：飞入动画初始化后立即置空 `wonMarbles`，防重复触发。但 2D 的 `vs-render.js` 也读 `wonMarbles`——**两者互斥**（3D/2D 不同时实例化，OK）。
 18. **3D 降级**：`shouldUse3D()` 检测 WebGL + `?2d=1` 强制 2D。低端机 WebGL 不可用自动回退 Canvas 2D，游戏永远能玩。
 19. **skin 颜色 rgba→hex**：skins.js 的颜色是 `rgba()` 字符串，Three.js 需要 `0x` 数字 → `_rgbaToHex` 正则解析。
-20. **three.module.js 在 Node 不能 import**（依赖 window/canvas）：Node 单测只测 `to3D/to2D` 纯函数 + 适配器回调逻辑，不 new WebGLRenderer。
+20. **竖屏自适应（v3.1.2）**：对战世界尺寸 = 画布实际尺寸（`createVsGame({worldW, worldH})`），`RING/START_LINE/VS_CFG` 是动态 getter 基于 `VS_W/VS_H` 计算，**不要再改回固定 800x600**。`startVs` 必须先 `show('vs')` 再创建游戏（hidden 时 clientWidth=0 会回退 window.innerWidth 导致世界比画布高、母弹画布外）。`vsRestart` 必须保留 `game.world.w/h`（否则退回 800x600）。
+21. **胜负判定（v3.1.3）**：`resolveShot` 三个分支（停圈惩罚/连打/出圈没击出）**不能提前 return**，必须落到第 389 行统一胜负判定（`inRing<=0` → GAME_OVER）。否则最后彩珠清空后游戏不结束。
+22. **three.module.js 在 Node 不能 import**（依赖 window/canvas）：Node 单测只测 `to3D/to2D` 纯函数 + 适配器回调逻辑，不 new WebGLRenderer。
 
 ## 📋 待开发（GDD 路线图）
 
@@ -327,6 +329,30 @@ npx wrangler pages deploy . --project-name marbles --branch main --commit-dirty=
 - 已上线：https://marbles-bws.pages.dev/（v3.0.1）
 - **待真机验证**：iPhone/Android 帧率 + 触控瞄准手感（CDP 无法模拟 touch，需真机）
 - 2D 降级：WebGL 不可用 / `?2d=1` 自动回退 Canvas 2D
+
+## 📅 今日会话记录（2026-09-10）
+
+**主题**：AI 弹珠贴图资产管线 → 竖屏自适应 → 结算 bug 修复，三连发
+
+**1. v3.1.1 — AI 玻璃弹珠贴图接入**：
+- 火山豆包（Seedream 5.0）生成 8 种样式弹珠图，提示词优化（纯白底/居中/无环境）
+- 资产管线脚本 `scripts/process_marble_assets.py`：rembg 抠图 → 居中裁剪 → 256px → 投影 → manifest
+- 贴图加载器 `src/marble-textures.js` + 渲染接入（无贴图回退程序化，渐进增强）
+- 踩坑：浏览器 ES Module 缓存顽固 → 改版本号强制刷新
+
+**2. v3.1.2 — 竖屏自适应布局**（用户反馈"上下空、圈小"）：
+- 根因：世界固定 800x600 横屏比例，竖屏被宽度限制只占高度 1/3
+- 世界尺寸动态化：`createVsGame({worldW, worldH})`，RING/START_LINE/VS_CFG 改动态 getter
+- 圈最大化：`min(宽*40%, 高*38%)` → 竖屏占宽度 78%（原 42%）
+- 修复 P0：startVs 在 hidden 时取尺寸导致母弹画布外（先 show 再创建）
+- 用户明确：**只做竖屏，不做横屏**
+
+**3. v3.1.3 — 最后彩珠清空不结算 bug**（用户报告）：
+- 根因：resolveShot 连打分支提前 return，跳过胜负判定
+- 修复：去掉 return 落到统一判定 + 连打补 turnCount++
+- 回归测试 +2（44 全绿），测试有效性验证（还原 bug → 测试失败）
+
+**下次接续**：真机试玩反馈；v1.1.1 难度选择 UI；Blender 3D 资产管线（360° 查看器）
 
 ## 📁 关联文档
 
