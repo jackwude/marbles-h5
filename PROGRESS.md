@@ -1,8 +1,9 @@
 # 🎯 打弹珠（Marbles H5）— 项目进度
 
-> **最后更新**：2026-09-10
+> **最后更新**：2026-09-28
 > **当前版本**：v3.1.3（右下角徽章显示）
 > **线上地址**：https://marbles-bws.pages.dev/
+> **GitHub**：https://github.com/jackwude/marbles-h5（public，源码备份，2026-09-28 建立）
 > **CF Pages 项目**：`marbles`（Production: main 分支，独立项目，不碰现有线上）
 
 ---

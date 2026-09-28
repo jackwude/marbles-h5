@@ -3,12 +3,13 @@
 - 简介：H5 Canvas 打弹珠小游戏，闯关 + 圈内对战 AI 双模式
 - 技术栈：原生 JS Canvas + ES Modules，Node 内置 test runner
 - 线上：https://marbles-bws.pages.dev
+- GitHub：https://github.com/jackwude/marbles-h5（public）
 - 路径：`~/.hermes/workspace/projects/marbles-h5`
 - 进度：`PROGRESS.md`（模块地图 + 版本历史）
 
 ## 命令
 
-- 测试：`npm test`（node --test test/）
+- 测试：`npm test`（node --test test/*.test.js，须显式 glob —— 旧写法 `node --test test/` 在 Node 22+ 被当模块路径解析直接报错）
 - 本地预览：`python3 -m http.server 8080`（ES Modules 需 HTTP，不能用 file://）
 - 部署：Cloudflare Pages（wrangler pages deploy .）
 
